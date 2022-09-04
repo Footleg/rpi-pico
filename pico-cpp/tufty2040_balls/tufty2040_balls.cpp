@@ -167,19 +167,25 @@ int main() {
 
           //Bounce if contacting
           rd = shape.r + shapes[j].r;
-          if(sep < rd) {
-            /*
-            //Trig solution
-            float angle = atan2(sepy, sepx);
-            float targetX = shape.x + cos(angle) * sep;
-            float targetY = shape.y + sin(angle) * sep;
-            float ax = (targetX - shape.x);
-            float ay = (targetY - shape.y);
-            */
+          if( sep < rd) {
+            // If forces between balls, allow to pass each other when overlapping,
+            // unless centres really close. Don't apply forces during overlap as
+            // force is too strong and they just stick together.
+            if (mode == 0 || sep < rd / 4) {
+              //Bounce balls off each other
+              /*
+              //Trig solution
+              float angle = atan2(sepy, sepx);
+              float targetX = shape.x + cos(angle) * sep;
+              float targetY = shape.y + sin(angle) * sep;
+              float ax = (targetX - shape.x);
+              float ay = (targetY - shape.y);
+              */
 
-            //Handle x and y components seperately (more efficient)
-            ax = sepx;
-            ay = sepy;
+              //Handle x and y components seperately (more efficient)
+              ax = sepx;
+              ay = sepy;
+            }
           }
           else {
             switch(mode){
