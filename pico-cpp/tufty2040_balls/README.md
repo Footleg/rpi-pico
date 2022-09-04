@@ -7,11 +7,11 @@ levels was fascinating, so I added the option to zoom out to give the balls more
 calculations required to draw each ball when zoomed out, but also because the distances the balls have to move increase, so they appear slower on the screen.
 
 ## Summary of Controls
-Button A: Toggles between Bounce mode and Force mode.
-Button B: Adds a ball for each press (or hold to add several)
-Button C: Toggles mass on and off. When on (m) appears to indicate that the size of balls in taken into account.
+- Button A: Toggles between Bounce mode and Force mode.
+- Button B: Adds a ball for each press (or hold to add several)
+- Button C: Toggles mass on and off. When on (m) appears to indicate that the size of balls in taken into account.
 
-Up/Down: These buttons increase/decrease the force level when mass is off, or zoom out/in when mass is on.
+- Up/Down: These buttons increase/decrease the force level when mass is off, or zoom out/in when mass is on.
 
 The zooming out is straight forward, as more space is just given to the balls. Zooming in snaps to just fit all the balls on the screen, so it only makes a
 significant difference when all the balls are close together leaving space to crop from around them.
