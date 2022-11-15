@@ -13,6 +13,7 @@ I have since found I needed different syntax for the fix for the problem with th
 (Change that path to point to your mingw64 location if you installed it somewhere different). Remember to start a new git bash terminal after you update the bash.rc file for the changes to take effect.
 
 If you cloned this repo without the --recursive switch then you will need to run the following command to clone the submodules:
+
 `git submodule update --init --recursive`
 
 You should now be able to build any of the projects from this repo, by following these steps.
