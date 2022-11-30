@@ -52,7 +52,6 @@ const uint8_t animModeGol = 0;
 const uint8_t animModeCrawler = 1;
 const uint8_t animModeParticles = 2;
 
-uint8_t pixelSize = 20;
 
 uint16_t steps = 10;
 uint16_t minSteps = 2;
@@ -67,16 +66,22 @@ uint8_t golStartPattern = 0;
 // using the syntax *this
 class Animation : public RGBMatrixRenderer {
     public:
-        Animation(uint16_t width, uint16_t height, 
+        Animation(uint8_t pixScale, 
             uint16_t steps_, uint16_t minSteps_, 
             uint8_t golFadeSteps_, uint16_t golDelay_, uint8_t golStartPattern_,
             uint16_t shake, uint8_t bounce_)
-            : RGBMatrixRenderer{width,height}, 
+            : RGBMatrixRenderer{graphics.bounds.w/pixScale,graphics.bounds.h/pixScale}, 
               animCrawler(*this, steps_, minSteps_,true), 
               animGol(*this, golFadeSteps_, golDelay_, golStartPattern_),
-              animParticles(*this,shake,bounce_)
+              animParticles(*this,shake,bounce_),
+              pixelSize(pixScale)
         {
-            //Precalculate pixel radius
+            //Clear screen
+            Pen BG = graphics.create_pen(0, 0, 0);
+            graphics.set_pen(BG);
+            graphics.clear();
+
+           //Precalculate pixel radius
             if(pixelSize > 7){
                 rad = pixelSize/2-1;
             }
@@ -183,12 +188,12 @@ class Animation : public RGBMatrixRenderer {
             return animParticles.getParticleCount();
         }
 
-        void drawLine(u_int16_t x1, u_int16_t y1, u_int16_t x2, u_int16_t y2 ){
+        void drawLine(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2 ){
             //Get smaller and larger points
-            u_int16_t xa = x1;
-            u_int16_t xb = x2;
-            u_int16_t ya = y1;
-            u_int16_t yb = y2;
+            uint16_t xa = x1;
+            uint16_t xb = x2;
+            uint16_t ya = y1;
+            uint16_t yb = y2;
             if (x2 < x1) {
                 xa = x2;
                 xb = x1;
@@ -209,13 +214,13 @@ class Animation : public RGBMatrixRenderer {
                     ya = y2;
                     yb = y1;
                 }
-                for(u_int16_t y=ya; y<=yb; y++){
+                for(uint16_t y=ya; y<=yb; y++){
                     setPixelColour(xa,y,yellow);
                 }
             }
             else {
-                for(u_int16_t x=xa; x<=xb; x++){
-                    u_int16_t y = ya + (yb-ya) * (x-xa)/(xb-xa);
+                for(uint16_t x=xa; x<=xb; x++){
+                    uint16_t y = ya + (yb-ya) * (x-xa)/(xb-xa);
                     setPixelColour(x,y,yellow);
                 }
                 //Mark ends
@@ -235,6 +240,7 @@ class Animation : public RGBMatrixRenderer {
         uint8_t animationMode;
         Pen WHITE = graphics.create_pen(255, 255, 255);
         uint16_t cycles;
+        uint8_t pixelSize;
 
         virtual void setPixel(uint16_t x, uint16_t y, RGB_colour colour) 
         {
@@ -263,6 +269,7 @@ class Animation : public RGBMatrixRenderer {
 int main() {
     uint16_t shake = 100;
     uint8_t bounce = 200;
+    uint8_t pixelSize = 20;
 
     // Initialise random numbers seed using floating adc input reading
     adc_init();
@@ -278,19 +285,12 @@ int main() {
 
     st7789.set_backlight(255);
 
-    Pen BG = graphics.create_pen(0, 0, 0);
-
     uint8_t animationMode = 0;
-    Animation animation(int(graphics.bounds.w/pixelSize),int(graphics.bounds.h/pixelSize),
-        steps,minSteps,golFadeSteps,golDelay,golStartPattern,shake,bounce);
+    Animation animation(pixelSize,steps,minSteps,golFadeSteps,golDelay,golStartPattern,shake,bounce);
 
     uint8_t oldPixelSize;
     uint8_t oldFadeSteps;
     uint8_t oldGolStartPattern;
-
-    //Clear screen
-    graphics.set_pen(BG);
-    graphics.clear();
 
     while(true) {
         //Call animation class method to run a cycle
@@ -346,8 +346,8 @@ int main() {
             }
             else if(animationMode == animModeParticles){
                 //animation.drawLine(animation.random_int16(20,100),animation.random_int16(20,80),animation.random_int16(20,100),animation.random_int16(20,80));
-                u_int16_t xl = animation.getGridWidth() * 0.8;
-                u_int16_t yl = animation.getGridHeight() * 0.7;
+                uint16_t xl = animation.getGridWidth() * 0.8;
+                uint16_t yl = animation.getGridHeight() * 0.7;
                 animation.drawLine(animation.getGridWidth()/2,yl,xl,animation.getGridHeight()/2);
                 animation.drawLine(animation.getGridWidth()/2,animation.getGridHeight()-yl,xl,animation.getGridHeight()/2);
                 animation.drawLine(animation.getGridWidth()/2,yl,animation.getGridWidth()-xl,animation.getGridHeight()/2);
@@ -360,26 +360,15 @@ int main() {
             animation.~Animation();
             if(golStartPattern > 0 && golStartPattern != 3){
                 pixelSize = 4;
-                new(&animation) Animation(64,64,steps,minSteps,golFadeSteps,golDelay,golStartPattern,shake,bounce);
+                new(&animation) Animation(pixelSize,steps,minSteps,golFadeSteps,golDelay,golStartPattern,shake,bounce);
             }
             else if(pixelSize > 1){
-                new(&animation) Animation(int(graphics.bounds.w/pixelSize),int(graphics.bounds.h/pixelSize),
+                new(&animation) Animation(pixelSize,
                     steps,minSteps,golFadeSteps,golDelay,golStartPattern,shake,bounce);
             }
             else {
-                new(&animation) Animation(220,150,steps,minSteps,golFadeSteps,golDelay,golStartPattern,shake,bounce);
+                new(&animation) Animation(2,steps,minSteps,golFadeSteps,golDelay,golStartPattern,shake,bounce);
             }
-            //Clear display
-            graphics.set_pen(BG);
-            graphics.clear();
-
-            //Debug message
-            // char msg[24];
-            // sprintf(msg, "Pixel size: %u rad: %u", pixelSize, animation.rad);
-            // animation.outputMessage(msg);
-            // animation.showPixels();
-            // sleep_ms(500);
-
         }
     }
 
