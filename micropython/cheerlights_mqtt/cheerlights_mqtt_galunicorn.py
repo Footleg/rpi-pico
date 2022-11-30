@@ -43,15 +43,13 @@ from machine import Timer, Pin
 from galactic import GalacticUnicorn
 from picographics import PicoGraphics, DISPLAY_GALACTIC_UNICORN as DISPLAY
 
-MQTTCHECK_INTERVAL = 20  # Interval in secsonds between checks for MQTT messages
+MQTTCHECK_INTERVAL = 20  # Interval in seconds between checks for MQTT messages
 
 mqtt_topic = 'cheerlightsRGB'
 
-# Update this to match the number of NeoPixel LEDs connected to your board.
-num_pixels = 24
-
 # Counter for the number of messages received
 msgCounter = 0
+checkCount = 0
 
 # Track last colour seen to avoid repeats. Initialised to a colour we never see on cheerlights
 lastRGB = (1,1,1)
@@ -65,7 +63,7 @@ def hex_to_rgb(hex):
 
 # MQTT callback
 def on_message(topic, msg):
-    global msgCounter, isIdle, lastRGB
+    global msgCounter, isIdle, lastRGB, checkCount
     msgCounter += 1
     print((topic, msg, msgCounter))
     try:
@@ -95,12 +93,18 @@ def on_message(topic, msg):
         # Store colour to check against next time
         lastRGB = colRGB
         
+        #Reset message check counter
+        checkCount = 0
+        
     except ValueError as e:
         print(f"Invalid message format: {e}")
         
 
 def reconnectMQTT():
-    global client
+    global client,checkCount
+    # Reset check counter on connection reset
+    checkCount = 0
+
     client = connect_mqtt.establishConnection('my_unique_client_id',led)
     if client != None:
         client.set_callback(on_message)
@@ -174,7 +178,12 @@ while True:
     
     if msgchkcounter == 0:
         # Check for MQTT messages
-        print("Checking for new messages")
+        checkCount += 1
+        if checkCount > 90:
+            print(f"{checkCount} No new messages detected for 30 minutes, resetting MQTT client.")
+            reconnectMQTT()
+        else:
+            print(f"{checkCount} Checking for new messages")
         try:
             client.check_msg()
         except (AttributeError,OSError) as e:

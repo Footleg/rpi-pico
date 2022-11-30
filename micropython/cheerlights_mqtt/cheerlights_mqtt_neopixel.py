@@ -41,6 +41,7 @@ import machine
 import struct
 import connect_mqtt
 from neopixel import Neopixel
+MQTTCHECK_INTERVAL = 20  # Interval in seconds between checks for MQTT messages
 
 mqtt_topic = 'cheerlightsRGB'
 
@@ -49,6 +50,7 @@ num_pixels = 24
 
 # Counter for the number of messages received
 msgCounter = 0
+checkCount = 0
 
 # Track last colour seen to avoid repeats. Initialised to a colour we never see on cheerlights
 lastRGB = (1,1,1)
@@ -86,12 +88,18 @@ def on_message(topic, msg):
         # Store colour to check against next time
         lastRGB = colRGB
         
+        #Reset message check counter
+        checkCount = 0
+        
     except ValueError as e:
         print(f"Invalid message format: {e}")
         
 
 def reconnectMQTT():
-    global client
+    global client,checkCount
+    # Reset check counter on connection reset
+    checkCount = 0
+
     client = connect_mqtt.establishConnection('my_unique_client_id',led)
     if client != None:
         client.set_callback(on_message)
@@ -113,14 +121,27 @@ for i in range(5):
     time.sleep(0.1)
 led.toggle()
 
+msgchkcounter = 0
 while True:
-    # Check for MQTT messages
-    try:
-        client.check_msg()
-    except (AttributeError,OSError) as e:
-        print(f"Exception in checking message: {e}")
-        # Reconnect to MQTT server
-        reconnectMQTT()
+    if msgchkcounter >= MQTTCHECK_INTERVAL * 100:
+        msgchkcounter = 0
     
-    # Pause for a while so we don't spam the MQTT server too frequently   
-    time.sleep(20)
+    if msgchkcounter == 0:
+        # Check for MQTT messages
+        checkCount += 1
+        if checkCount > 90:
+            print(f"{checkCount} No new messages detected for 30 minutes, resetting MQTT client.")
+            reconnectMQTT()
+        else:
+            print(f"{checkCount} Checking for new messages")
+        try:
+            client.check_msg()
+        except (AttributeError,OSError) as e:
+            print(f"Exception in checking message: {e}")
+            # Reconnect to MQTT server
+            reconnectMQTT()
+            
+    msgchkcounter += 1
+    
+    # Pause briefly to allow processor breathing space   
+    time.sleep(0.01)
