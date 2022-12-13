@@ -23,6 +23,11 @@ using namespace pimoroni;
 PicoGraphics_PenRGB888 graphics(53, 11, nullptr);
 GalacticUnicorn galactic_unicorn;
 
+uint32_t time() {
+  absolute_time_t t = get_absolute_time();
+  return to_ms_since_boot(t);
+}
+
 const uint8_t animModeGol = 0;
 const uint8_t animModeCrawler = 1;
 const uint8_t animModeParticles = 2;
@@ -74,15 +79,19 @@ class Animation : public RGBMatrixRenderer {
                    break;
                 case 1:
                     animCrawler.runCycle();
-                    sleep_ms(1);
                     break;
                 case 2:
                     animParticles.runCycle();
                     if(cycles > 1000){
                         cycles = 0;
-                        animParticles.setAcceleration(100-rand()%200,100-rand()%200);
+                        uint16_t ax = 0;
+                        uint16_t ay = 0;
+                        while(abs(ax) + abs(ay) < 200) {
+                            ax = 200-rand()%400;
+                            ay = 200-rand()%400;
+                        }
+                        animParticles.setAcceleration(ax,ay);
                     }
-                    sleep_ms(1);
                     break;
             }
             cycles++;
@@ -96,7 +105,7 @@ class Animation : public RGBMatrixRenderer {
             if (msg[0] == 32){
                 graphics.set_pen(WHITE);
                 Point text_location(0, 0);
-                graphics.text(msg, text_location, 320);
+                graphics.text(msg, text_location, getGridWidth() );
 
             }
         }
@@ -116,7 +125,7 @@ class Animation : public RGBMatrixRenderer {
 
         void setParticles() {
             //Set particles
-            animParticles.setAcceleration(0,-50);
+            animParticles.setAcceleration(0,200);
 
             animParticles.clearParticles();
             animParticles.imgToParticles();
@@ -241,24 +250,25 @@ int main() {
     uint8_t oldFadeSteps;
     uint8_t oldGolStartPattern;
 
-    uint16_t speed = 200;
+    uint16_t loopDelay = 20;
+    uint32_t loopstartTime = time();
 
     bool crawlerAnyAngle = false;
 
     while(true) {
-        //Call animation class method to run a cycle
-        animation.animationStep();
-
         //Store config options so we can detect if any changed
         oldFadeSteps = golFadeSteps;
         oldGolStartPattern = golStartPattern;
 
         if(galactic_unicorn.is_pressed(galactic_unicorn.SWITCH_BRIGHTNESS_UP)) {
             galactic_unicorn.adjust_brightness(+0.01);
+            sleep_ms(50);
         }
         if(galactic_unicorn.is_pressed(galactic_unicorn.SWITCH_BRIGHTNESS_DOWN)) {
             galactic_unicorn.adjust_brightness(-0.01);
+            sleep_ms(50);
         }
+
         if(galactic_unicorn.is_pressed(galactic_unicorn.SWITCH_VOLUME_UP)) {
             if(galactic_unicorn.is_pressed(galactic_unicorn.SWITCH_D)) {
                 if(animationMode == animModeGol){
@@ -266,9 +276,10 @@ int main() {
                 }
             }
             else {
-                speed += 100;
-                if (speed > 1000) speed = 1000;
+                loopDelay -= 10;
+                if (loopDelay > 65000) loopDelay = 0;
             }
+            sleep_ms(50);
         }
         if(galactic_unicorn.is_pressed(galactic_unicorn.SWITCH_VOLUME_DOWN)) {
             if(galactic_unicorn.is_pressed(galactic_unicorn.SWITCH_D)) {
@@ -277,9 +288,10 @@ int main() {
                 }
             }
             else {
-                speed -= 100;
-                if (speed > 65000) speed = 0;
+                loopDelay += 10;
+                if (loopDelay > 1000) loopDelay = 1000;
             }
+            sleep_ms(50);
         }
 
         if(galactic_unicorn.is_pressed(galactic_unicorn.SWITCH_A)) {
@@ -301,31 +313,57 @@ int main() {
         }
 
         if(galactic_unicorn.is_pressed(galactic_unicorn.SWITCH_B)) {
+            sleep_ms(500);
             if(animationMode == animModeGol){
-                // golStartPattern++;
+                // golStartPattern++; <-- DISABLED as none of the preset patterns work well on the resolution of this matrix
                 if(golStartPattern > 8) golStartPattern = 0;
             }
             else if(animationMode == animModeCrawler){
                 crawlerAnyAngle = not crawlerAnyAngle;
                 animation.setCrawlerAnyAngle(crawlerAnyAngle);
-        //     else if(animationMode == animModeParticles){
-        //         //animation.drawLine(animation.random_int16(20,100),animation.random_int16(20,80),animation.random_int16(20,100),animation.random_int16(20,80));
-        //         uint16_t xl = animation.getGridWidth() * 0.8;
-        //         uint16_t yl = animation.getGridHeight() * 0.7;
-        //         animation.drawLine(animation.getGridWidth()/2,yl,xl,animation.getGridHeight()/2);
-        //         animation.drawLine(animation.getGridWidth()/2,animation.getGridHeight()-yl,xl,animation.getGridHeight()/2);
-        //         animation.drawLine(animation.getGridWidth()/2,yl,animation.getGridWidth()-xl,animation.getGridHeight()/2);
-        //         animation.drawLine(animation.getGridWidth()/2,animation.getGridHeight()-yl,animation.getGridWidth()-xl,animation.getGridHeight()/2);
             }
+            else if(animationMode == animModeParticles){
+                // char msg[10];
+                // sprintf(msg, "Footleg");
+                // graphics.set_pen(graphics.create_pen(255, 100, 0));
+                // Point text_location(0, 0);
+                // graphics.text(msg, text_location, animation.getGridWidth() );
+                // Draw some fixed pixel shapes
+                RGB_colour yellow = {255,200,120};
+                RGB_colour red = {255,0,0};
+                RGB_colour blue = {0,0,255};
+
+                for(uint16_t y = 3; y < 7; ++y)
+                {
+                    for(uint16_t x = 10; x < 14; ++x)
+                    { 
+                        //Clear cells outside pattern
+                        animation.setPixelColour(x, y, blue);
+                    }
+                }
+
+                animation.drawCircle(20,5,3,red);
+                animation.updateDisplay();
+
+           }
+        } 
+
+        if (time() - loopstartTime > loopDelay) {
+            //Loop delay has elasped, so reset loop start time
+            loopstartTime = time();
+
+            //Update parameters if changed
+            if (golFadeSteps != oldFadeSteps || golStartPattern != oldGolStartPattern){
+                //Need to destroy and recreate animation objects
+                animation.~Animation();
+                new(&animation) Animation(steps,minSteps,golFadeSteps,golDelay,golStartPattern,shake,bounce);
+            }
+
+            //Increment animation cycle
+            animation.animationStep();
         }
 
-        if (golFadeSteps != oldFadeSteps || golStartPattern != oldGolStartPattern){
-            //Need to destroy and recreate animation objects
-            animation.~Animation();
-            new(&animation) Animation(steps,minSteps,golFadeSteps,golDelay,golStartPattern,shake,bounce);
-        }
-
-        sleep_ms(speed + 20);
+        sleep_ms(1);
     }
 
     return 0;
