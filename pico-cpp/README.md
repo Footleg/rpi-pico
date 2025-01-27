@@ -16,44 +16,45 @@ Now we are going to import an existing project which uses the Pimoroni libraries
 
 - Download the boilerplate project from github: [Pimoroni Pico Boilerplate](https://github.com/pimoroni/pico-boilerplate). We want a copy not linked to the Pimoroni repo, so download the code as a zip file rather than checking it out using git.
 - Unzip the boilerplate project into a new directory, and then rename this to the name you want to give your project.
-- We also need the pimoroni pico libraries for this project, so these need checking out alongside your project folder. 
+- We also need the pimoroni pico libraries for this project, so these need checking out alongside your project folder.
 (e.g. In the parent folder, do 'git clone https://github.com/pimoroni/pimoroni-pico')
 - Now open the project folder in VSCode. A pop-up should appear asking if you want to import this project as a Raspberry Pi Pico project. Confirm this, and VSCode should open an import form.
 - Accept the defaults and click ‘Import’.
 
-The Pico extension will now configure things in the background. If this is the first time you have use it on this computer, then it will download the Pico SDK. On subsequent loads, the SDK will be located so it will be quicker than this first time. At the bottom of the VSCode window, you should see pico related controls. You can change the version of the Pico SDK here, and choose which flavour of Pico you are developing on. e.g. If you have a Pico2, then change the Board to pico2. 
+The Pico extension will now configure things in the background. If this is the first time you have use it on this computer, then it will download the Pico SDK version selected, and the gcc compiler for the ARM processor. On subsequent loads, the these components will be located so it will be quicker than this first time. At the bottom of the VSCode window, you should see pico related controls. You can change the version of the Pico SDK here, and choose which flavour of Pico you are developing on. e.g. If you have a Pico2, then change the Board to pico2.
 
-Now this is where things didn't go quite so smoothly on Windows. The project will not compile yet, because something isn't quite right in the CMake configuration. Some of the includes fail to be located. The cpp source files will also show source not found errors on the includes. You can fix this with the CMakeTools extension and a seperate install of an earlier version of the arm-none-eabi compiler:
+Now this is where things didn't go quite so smoothly on Windows. The project may not compile yet, because something isn't quite right in the CMake configuration. Some of the includes fail to be located. The cpp source files will show source not found errors on the includes. You can fix this with the CMakeTools extension.
 
-- Download the AArch32 bare-metal target (arm-none-eabi) executable (.exe) from <https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads>
-To get this to work, I had to download v12.3 as none of the v13 or v14 builds I tried worked for me. The exe I downloaded was arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi.exe
-- Install the arm gnu toolchain, and on the final page of the install wizard, make sure you check the box to 'Add path to environment variable'.
-- If you have VSCode open, you should now restart it so it picks up this change to the path environment variable.
 - On the Extensions panel in VSCode, search for CMakeTools and install this extension.
-- Open the panel for the CMakeTools extension, and in the Configure group, select 'scan for kits'.
-- Once the scan is complete, you should see your GCC 12.3.1 arm-none-eabi in the kits list and you can select it.
-- With a suitable kit version selected, you can now click the ellipsis button in the header of the 'Project Outline' group, and select 'Clean Reconfigure All Projects' from the menu.
-If this step fails with an error, then change the kit selection to 'pico' and do Clean Reconfigure All Projects again. Then try to compile. I found this compile failed due to failing to find some dependencies, but I could now change back to the GCC 12.3.1 kit, do the Clean Reconfigure All Projects again (which succeeded this time), and now it could compile.
-- Now finally, you should see things working. Open the main.cpp file in the code editor and it should not show any errors.
+- Open the panel for the CMakeTools extension, look in the Configure group. If it says 'No kit selected', click on the pencil icon next to this and select the 'Pico' kit. If this kit is not present in the list then select 'scan for kits', then try again.
+- With a suitable kit selected, you can now click the ellipsis button in the header of the 'Project Outline' group, and select 'Clean Reconfigure All Projects' from the menu. The Project Outline pane should be populated now, and the main.cpp source file in the code editor should no longer show any errors for the #includes.
 - Click the compile button in the toolbar, and your project should build successfully.
-- Check the build directory under your project directory now contains a uf2 file. This is the built binary which you can flash onto your Pico (but don't as this was just an example requiring different hardware).
+- Check the build directory under your project directory now contains a uf2 file. This is the built binary which you can flash onto your Pico (but don't as this was just an example requiring hardware you may not have).
 
-Now you can start working on your own Pico C++ projects, replacing the code in the main.cpp with your own code. You will need to include libraries in the CMakeLists.txt which your code uses. Here is a walk through of building one of the Pimoroni examples in your new project.
-- Browse into the pimoroni-pico repo examples. Here I'll pick one of the galactic unicorn examples from pimoroni-pico/examples/galactic_unicorn
+If you are working under this repo with my examples, and you checked out the repo some time in the past then you may not have pulled in the latest version of the pimoroni-pico libraries. Just doing a git pull does not update the submodules (other repos references by this repo). Failing to realise this cost me an entire weekend of pain trying to get code to build. So make sure you have the most up to date copies of the submodules by running this command:
+`git submodule update --init --recursive`
+
+That hopefully fixes any compile errors in the boilerplate project.
+
+Now you can start working on your own Pico C++ projects, replacing the code in the main.cpp with your own code. You will need to include libraries in the CMakeLists.txt which your code uses. If you are working with some of the [Pimoroni Pico products](https://shop.pimoroni.com/collections/pico), then the best starting point is one of their examples. So here is a walk through of building one of these examples in your new project folder using the VSCode Pico extension.
+
+- Browse through the Pimoroni examples in the pimoroni-pico repo folder you already created alongside your project folder. Here I'll pick one of the galactic unicorn examples from pimoroni-pico/examples/galactic_unicorn
 - Open the CMakeLists.txt file from this folder in a text editor, and look for the 'fire effect' example.
 - Note which cpp file the example uses (fire_effect.cpp), and copy this into your project folder.
 - Check the includes in fire_effect.cpp. It includes another source file from the example folder (okcolor.hpp), so we also need to copy that file into our project folder. The other includes are pimoroni-pico libraries we will need to include via the CMakeLists file.
-- Copy the list of target_link_libraries(fire_effect pico_stdlib hardware_pio hardware_adc hardware_dma pico_graphics galactic_unicorn) used by this example. Paste these into the CMakeLists.txt file in your project in VSCode, replacing the set used by the original sample code. Take out the fire_effect item, and replace with ${NAME} at the start of the list, as our CMakeLists file uses this NAME variable to ensure the same name is used throughout.
-- Edit the source file used in the the project in the add_executable block, changing main.cpp to fire_effect.cpp
-- If we try to compile now, we will get errors as some required libraries are not included. We need to figure out the includes needed in the CMakeLists.txt file for the target libraries we included. The includes in the cpp source files give some clues, as do the target link libraries.
+- From the examples folder CMakeLists.txt file, copy the list of target_link_libraries(fire_effect pico_stdlib hardware_pio hardware_adc hardware_dma pico_graphics galactic_unicorn) used by the fire effect example. Paste these into the CMakeLists.txt file in your project in VSCode, replacing the set used by the original sample code. Take out the 'fire_effect' item, and replace this with ${NAME} at the start of the list, as our CMakeLists file uses this NAME variable to ensure the same name is used throughout the configuration.
+- Edit the name in the block: set(NAME pico-boilerplate) to make this project your own. (Change pico-boilerplate to a name of your choice).
+- Edit the source file specified for the project in the add_executable block, changing main.cpp to fire_effect.cpp
+- If we try to compile now, we will get errors as some required libraries are not included. We need to figure out the includes needed in the CMakeLists.txt file for the target libraries we included (and remove those from the boilerplate that we do not need). The includes in the cpp source files give some clues, as do the target link libraries. If you miss any, then the compiler errors will also give you some ideas as to what was missed. For further guidance, take a look in the CMakeLists.txt files under any of my example project folders in this repo for different Pimoroni Pico hardware combinations.
 
-I determined we needed this list:
+For the fire_effect examaple, I determined we needed this list:
+
 - include(common/pimoroni_bus)
 - include(libraries/bitmap_fonts/bitmap_fonts)
 - include(libraries/hershey_fonts/hershey_fonts)
 - include(libraries/galactic_unicorn/galactic_unicorn)
 - include(libraries/pico_graphics/pico_graphics)
 
-This should be everything needed to compile the example and produce a uf2 file to flash onto a [glacticunicorn](https://shop.pimoroni.com/products/space-unicorns?variant=40842033561683) from Pimoroni.
+This should be everything needed to compile the example and produce a uf2 file to flash onto a [glacticunicorn](https://shop.pimoroni.com/products/space-unicorns?variant=40842033561683) from Pimoroni. Look for a uf2 file matching the name you gave your project in the CMakeLists.txt file when you made it your own. If you have a different board, try to repeat the above steps with an example for the board you have.
 
-For further examples of ready configured projects ready to buid using the VSCode Raspberry Pi Pico Extension, take a look at the various folders in this repo for each hardware setup. I have extended the boilerplate CMakeLists files to include additional projects via cmake includes. See the Tufty2040 folder for example. This allows one configuration to build multiple projects, generating one uf2 file per project from the one hardware configuration.
+For further examples of ready configured projects to build using the VSCode Raspberry Pi Pico Extension, take a look at the various folders in this repo for each hardware setup. I have extended the boilerplate CMakeLists files to include additional projects via cmake includes. See the Tufty2040 folder for example. I add each project via a separate cmake file to specify the source file to build it and the target link libraries for that project. But they share the same set of includes for the hardware in the main CMakeLists.txt file for that folder. Each additional appliation is added via an include of the .cmake file into the main CMakeLists.txt file. This allows one configuration for the hardware to build multiple applications, generating one uf2 file per project from the one CMake configuration. Any additional libraries used by an application can be included from the .cmake file for that application. e.g. the tufty2040_animations application shows how I include my RGBMatrixAnimations library source to be compiled into the project.
