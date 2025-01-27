@@ -17,7 +17,7 @@ Now we are going to import an existing project which uses the Pimoroni libraries
 - Download the boilerplate project from github: [Pimoroni Pico Boilerplate](https://github.com/pimoroni/pico-boilerplate). We want a copy not linked to the Pimoroni repo, so download the code as a zip file rather than checking it out using git.
 - Unzip the boilerplate project into a new directory, and then rename this to the name you want to give your project.
 - We also need the pimoroni pico libraries for this project, so these need checking out alongside your project folder.
-(e.g. In the parent folder, do 'git clone https://github.com/pimoroni/pimoroni-pico')
+(e.g. In the parent folder, do `git clone https://github.com/pimoroni/pimoroni-pico`)
 - Now open the project folder in VSCode. A pop-up should appear asking if you want to import this project as a Raspberry Pi Pico project. Confirm this, and VSCode should open an import form.
 - Accept the defaults and click ‘Import’.
 
@@ -47,7 +47,7 @@ Now you can start working on your own Pico C++ projects, replacing the code in t
 - Edit the source file specified for the project in the add_executable block, changing main.cpp to fire_effect.cpp
 - If we try to compile now, we will get errors as some required libraries are not included. We need to figure out the includes needed in the CMakeLists.txt file for the target libraries we included (and remove those from the boilerplate that we do not need). The includes in the cpp source files give some clues, as do the target link libraries. If you miss any, then the compiler errors will also give you some ideas as to what was missed. For further guidance, take a look in the CMakeLists.txt files under any of my example project folders in this repo for different Pimoroni Pico hardware combinations.
 
-For the fire_effect examaple, I determined we needed this list:
+For the fire_effect example, I determined we needed this list:
 
 - include(common/pimoroni_bus)
 - include(libraries/bitmap_fonts/bitmap_fonts)

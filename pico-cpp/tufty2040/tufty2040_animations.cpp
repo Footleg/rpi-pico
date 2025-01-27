@@ -72,7 +72,7 @@ public:
               uint8_t golFadeSteps_, uint16_t golDelay_, uint8_t golStartPattern_,
               uint16_t shake, uint8_t bounce_)
         : RGBMatrixRenderer{static_cast<uint16_t>(bounds_w / pixScale), static_cast<uint16_t>(bounds_h / pixScale)},
-          animCrawler(*this, steps_, minSteps_, true),
+          animCrawler(*this, steps_, minSteps_, false),
           animGol(*this, golFadeSteps_, golDelay_, golStartPattern_),
           animParticles(*this, shake, bounce_),
           pixelSize(pixScale)
@@ -101,7 +101,7 @@ public:
         }
 
         // Initialise mode
-        animationMode = 0;
+        aniMode = animModeGol;
         cycles = 0;
     }
 
@@ -114,16 +114,16 @@ public:
 
     void animationStep()
     {
-        switch (animationMode)
+        switch (aniMode)
         {
-        case 0:
+        case animModeGol:
             animGol.runCycle();
             break;
-        case 1:
+        case animModeCrawler:
             animCrawler.runCycle();
             sleep_ms(1);
             break;
-        case 2:
+        case animModeParticles:
             animParticles.runCycle();
             if (cycles > 1000)
             {
@@ -164,7 +164,12 @@ public:
     void setMode(uint8_t mode)
     {
         cycles = 0;
-        animationMode = mode;
+        aniMode = mode;
+    }
+
+    void setCrawlerMode(bool mode)
+    {
+        animCrawler.anyAngle = mode;
     }
 
     void setParticles()
@@ -261,7 +266,7 @@ private:
     Crawler animCrawler;
     GameOfLife animGol;
     GravityParticles animParticles;
-    uint8_t animationMode;
+    uint8_t aniMode;
     Pen WHITE = graphics.create_pen(255, 255, 255);
     uint16_t cycles;
     uint8_t pixelSize;
@@ -297,6 +302,7 @@ int main()
     uint16_t shake = 100;
     uint8_t bounce = 200;
     uint8_t pixelSize = 20;
+    bool crawlerAnyAngle = false;
 
     // Initialise random numbers seed using floating adc input reading
     adc_init();
@@ -313,7 +319,7 @@ int main()
 
     st7789.set_backlight(255);
 
-    uint8_t animationMode = 0;
+    uint8_t animationMode = animModeGol;
     Animation animation(pixelSize, steps, minSteps, golFadeSteps, golDelay, golStartPattern, shake, bounce);
 
     uint8_t oldPixelSize;
@@ -359,7 +365,10 @@ int main()
             }
             else
             {
-                if (pixelSize > 1)
+                uint8_t minSize = 1;
+                if (animationMode == animModeGol and golStartPattern > 0)
+                    minSize = 2;
+                if (pixelSize > minSize)
                     pixelSize--;
             }
         }
@@ -388,8 +397,11 @@ int main()
             if (animationMode == animModeGol)
             {
                 golStartPattern++;
-                if (golStartPattern > 7)
+                if (golStartPattern > 8)
                     golStartPattern = 0;
+
+                if (golStartPattern > 0 and pixelSize < 2)
+                    pixelSize = 2;
             }
             else if (animationMode == animModeParticles)
             {
@@ -401,21 +413,31 @@ int main()
                 animation.drawLine(animation.getGridWidth() / 2, yl, animation.getGridWidth() - xl, animation.getGridHeight() / 2);
                 animation.drawLine(animation.getGridWidth() / 2, animation.getGridHeight() - yl, animation.getGridWidth() - xl, animation.getGridHeight() / 2);
             }
+            else if (animationMode == animModeCrawler)
+            {
+                crawlerAnyAngle = !crawlerAnyAngle;
+                animation.setCrawlerMode(crawlerAnyAngle);
+                while (button_b.raw())
+                    animation.msSleep(50); //Pause until button released
+            }
         }
 
         if (pixelSize != oldPixelSize || golFadeSteps != oldFadeSteps || golStartPattern != oldGolStartPattern)
         {
             // Need to destroy and recreate animation objects
             animation.~Animation();
+            animationMode = animModeGol;
             if (golStartPattern > 0 && golStartPattern != 3)
             {
-                pixelSize = 4;
+                if (pixelSize > 8)
+                    pixelSize = 8;
+                if (pixelSize < 2)
+                    pixelSize = 2;
                 new (&animation) Animation(pixelSize, steps, minSteps, golFadeSteps, golDelay, golStartPattern, shake, bounce);
             }
             else if (pixelSize > 1)
             {
-                new (&animation) Animation(pixelSize,
-                                           steps, minSteps, golFadeSteps, golDelay, golStartPattern, shake, bounce);
+                new (&animation) Animation(pixelSize, steps, minSteps, golFadeSteps, golDelay, golStartPattern, shake, bounce);
             }
             else
             {
