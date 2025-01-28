@@ -1,3 +1,19 @@
+# == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
+if(WIN32)
+    set(USERHOME $ENV{USERPROFILE})
+else()
+    set(USERHOME $ENV{HOME})
+endif()
+set(sdkVersion 2.1.0)
+set(toolchainVersion 13_3_Rel1)
+set(picotoolVersion 2.1.0)
+set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
+if (EXISTS ${picoVscode})
+    include(${picoVscode})
+endif()
+# ====================================================================================
+set(PICO_BOARD pico CACHE STRING "Board type")
+
 cmake_minimum_required(VERSION 3.12)
 
 # Change your executable name to something creative!
@@ -14,11 +30,12 @@ set(CMAKE_CXX_STANDARD 17)
 # Initialize the SDK
 pico_sdk_init()
 
-add_subdirectory(../RGBMatrixAnimations/src RGBMatrixAnimations)
+include_directories("${PROJECT_SOURCE_DIR}/../RGBMatrixAnimations/src") # Include additional source directory
+add_subdirectory(../RGBMatrixAnimations/src RGBMatrixAnimations) # Map additional source to RGBMatrixAnimations library name
 
 # Add your source files
 add_executable(${NAME}
-    galunicornanim.cpp # <-- Add source files here!
+    galunicorn_anim.cpp # <-- Add source files here!
 )
 
 # Include required libraries
@@ -27,13 +44,7 @@ include(common/pimoroni_bus)
 include(libraries/bitmap_fonts/bitmap_fonts)
 include(libraries/hershey_fonts/hershey_fonts)
 include(libraries/galactic_unicorn/galactic_unicorn)
-include(libraries/pico_graphics/pico_graphics)
 include(drivers/button/button)
-
-target_include_directories(${NAME} PUBLIC
-                          "${PROJECT_BINARY_DIR}"
-                          "${PROJECT_SOURCE_DIR}/../RGBMatrixAnimations/src"
-                          )
 
 # Don't forget to link the libraries you need!
      
@@ -44,7 +55,6 @@ target_link_libraries(${NAME}
     hardware_dma
     hardware_pio
     hardware_adc
-    pico_graphics
     button
     pimoroni_bus 
     hardware_pwm 
