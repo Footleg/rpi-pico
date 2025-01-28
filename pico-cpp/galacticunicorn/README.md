@@ -1,0 +1,3 @@
+# Applications for the [Pimoroni Galactic Unicorn](https://shop.pimoroni.com/products/space-unicorns?variant=40842033561683)
+
+This project is set up for development using the Raspberry Pi Pico Extension in VSCode. To build this project, install Raspberry Pi Pico Extension in VSCode and then open the galacticunicorn folder in VSCode. Be sure you cloned the git repo containing these projects using the --recursive flag, to fetch the required dependencies. The project should then build successfully when you click the compile button on the task bar at the bottom of the VSCode window which the Raspberry Pi Pico Extension provides.
