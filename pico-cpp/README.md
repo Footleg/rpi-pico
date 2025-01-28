@@ -1,6 +1,6 @@
 # Pico C++ Programs
 
-Welcome to my C++ projects for devices using the RP2040 and RP2350 families of chips from Raspberry Pi. These are microcontroller chips used on the Raspberry Pi Pico, PicoW, Pico2 and Pico2W boards. I have reorganised these projects into folders by hardware required. These are mostly product made and sold by [Pimoroni](https://shop.pimoroni.com). Each folder is designed to be opened individually in the VSCode editor to use the Raspberry Pi Pico extension to compile all the projects for that hardware combination together (generating one uf2 file per program).
+Welcome to my C++ projects for devices using the RP2040 and RP2350 families of chips from Raspberry Pi. These are microcontroller chips used on the Raspberry Pi Pico, PicoW, Pico2 and Pico2W boards. I have reorganised these projects into folders by hardware required. These are mostly hardware products made and sold by [Pimoroni](https://shop.pimoroni.com). Each folder is designed to be opened individually in the VSCode editor to use the Raspberry Pi Pico extension to compile all the projects for that hardware combination together (generating one uf2 file per program).
 
 Many of these projects use the Pico libraries from Pimoroni, and some use my own RGB Matrix Animations library to generate animations. If you cloned this repo without the --recursive switch then you will need to run the following command to clone the submodules to pull down the source code for these dependencies:
 
@@ -12,7 +12,9 @@ Since the Raspberry Pi Pico extension for VSCode was released, development for t
 
 - Start by launching VSCode, then in the Extensions panel, search for the Raspberry Pi Pico extension and install it.
 
-Now we are going to import an existing project which uses the Pimoroni libraries. This project is the Pimoroni Boilerplate project, a template for setting up a new Pico project. As it was written for the old development environment using [WSL on Windows](https://learn.pimoroni.com/article/pico-development-using-wsl), we need to convert it to use the Raspberry Pi Pico extension.
+If you just want to build and play with one of my applications, these are already set up to build using the pico extension in VSCode. Just open the project folder in VSCode and click 'compile' in the task bar. See the README file in each project directory for further details on that project.
+
+The rest of this guide covers how to start a new project which uses the Pimoroni libraries. We will start from the Pimoroni Boilerplate project, a template for setting up a new Pico project. This boilerplate was written for the old development environment using [WSL on Windows](https://learn.pimoroni.com/article/pico-development-using-wsl), we need to convert it to use the Raspberry Pi Pico extension.
 
 - Download the boilerplate project from github: [Pimoroni Pico Boilerplate](https://github.com/pimoroni/pico-boilerplate). We want a copy not linked to the Pimoroni repo, so download the code as a zip file rather than checking it out using git.
 - Unzip the boilerplate project into a new directory, and then rename this to the name you want to give your project.

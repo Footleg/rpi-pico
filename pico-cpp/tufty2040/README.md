@@ -1,13 +1,12 @@
 # Applications for the [Tufty2040 Badge](https://shop.pimoroni.com/products/tufty-2040)
 
+This project is set up for development using the Raspberry Pi Pico Extension in VSCode. To build this project, install Raspberry Pi Pico Extension in VSCode and then open the tufty2040 folder in VSCode. Be sure you cloned the git repo containing these projects using the --recursive flag, to fetch the required dependencies. The project should then build successfully when you click the compile button on the task bar at the bottom of the VSCode window which the Raspberry Pi Pico Extension provides.
+
+There are two applications in this project.
+
 ## Tufty Balls
 
-Initially based on the drawing example code from Pimoroni, I added collisions between balls. Then things started to get out of hand as the ideas flooded in.
-I added the ability to add more balls using the buttons. Then I added 'force' mode where there is a repelling force between balls. The up and down buttons let
-you change the level of force. Make it negative and the balls are attracted to each other rather than repelled. Next came the inclusion of the size of the balls
-in the amount of energy they impart in collisions or force they exert on each other. In particular the orbital mechanics when in force mode with negative force
-levels was fascinating, so I added the option to zoom out to give the balls more space. Infinite space! It does get a bit slower both due to the additional
-calculations required to draw each ball when zoomed out, but also because the distances the balls have to move increase, so they appear slower on the screen.
+Initially based on the drawing example code from Pimoroni, I added collisions between balls. Then things started to get out of hand as the ideas flooded in. I added the ability to add more balls using the buttons. Then I added 'force' mode where there is a repelling force between balls. The up and down buttons let you change the level of force. Make it negative and the balls are attracted to each other rather than repelled. Next came the inclusion of the size of the balls in the amount of energy they impart in collisions or force they exert on each other. In particular the orbital mechanics when in force mode with negative force levels was  ascinating, so I added the option to zoom out to give the balls more space. Infinite space! It does get a bit slower both due to the additional calculations required to draw each ball when zoomed out, but also because the distances the balls have to move increase, so they appear slower on the screen.
 
 ### Summary of Controls
 
@@ -22,9 +21,7 @@ significant difference when all the balls are close together leaving space to cr
 
 ### Some fun settings
 
-Add a 3rd ball (button B), switch to force mode (button A), then decrease the force to around -24 (down button). Now toggle on mass (button C), and finally zoom
-out a couple of levels (Up button, now that mass is applied). Watch the balls orbit each other in chaotic patterns! Add more balls at any time with button B.
-You can reset to restart with just 2 balls by pressing the reset button on the back (twice).
+Add a 3rd ball (button B), switch to force mode (button A), then decrease the force to around -24 (down button). Now toggle on mass (button C), and finally zoom out a couple of levels (Up button, now that mass is applied). Watch the balls orbit each other in chaotic patterns! Add more balls at any time with button B. You can reset to restart with just 2 balls by pressing the reset button on the back (twice).
 
 ## RGB Matrix Animations
 
@@ -41,5 +38,5 @@ There are several animations in the library.
 - Up and Down: Change the simulated pixel size on the screen, from 20 pixel diameter circles, all the way down to 2 pixel diameter. We can't do 1 pixel LEDs on the Tufty2040 as it crashes the cpu.
 This option restarts the animation at the new resolution, so always resets to a fresh Game of Life.
 - Button A: Switches between the animations. Game of Life -> Crawler -> Gravity particles (turns the screen contents to falling sand).
-- Button B: Toggles different behaviours in each animation mode.
-- Button C: If held down while pressing the Up or Down buttons, enables up/down to change the number of fade steps in Game of Life (where cells grow by fading in green, and die by fading to red).
+- Button B: Toggles different behaviours for each animation mode. In Game of Life is switches between some different interesting start patterns.
+- Button C: If held down while pressing the Up or Down buttons, enables up/down to change the number of fade steps in Game of Life (where cells grow by fading in green, and die by fading to red). The more fade steps, the slower the life simulation runs.
