@@ -54,18 +54,23 @@ struct pt {
   uint16_t pen;
 };
 
+struct idxPair {
+  uint16_t idx1;
+  uint16_t idx2;
+};
+
 pt createShape() {
   pt shape;
   shape.x = rand() % graphics.bounds.w;
   shape.y = rand() % graphics.bounds.h;
   shape.r = (rand() % 20) + 2;
-  shape.dx = float(rand() % 255) / 64.0f;
-  shape.dy = float(rand() % 255) / 64.0f;
+  shape.dx = 4.0 - (float(rand() % 255) / 32.0);
+  shape.dy = 4.0 - (float(rand() % 255) / 32.0);
   // Generate random colour which is not too dark
   uint8_t r = 0;
   uint8_t g = 0;
   uint8_t b = 0;
-  while (r + g + b < 192) {
+  while (r + g + b < 224) {
     r = rand() % 255;
     g = rand() % 255;
     b = rand() % 255;
@@ -103,7 +108,9 @@ int main() {
   // Get the start time (used to calculate fps)
   start_fps = time_us_64();
 
-  std::vector<pt> shapes;
+  std::vector<pt> shapes;          // These are the balls in the simulation
+  std::vector<idxPair> mergeList;  // List of pairs of balls indices to be
+                                   // merged into one after collisions
 
   // Create 2 spheres initially
   for (int i = 0; i < 2; i++) {
@@ -116,14 +123,15 @@ int main() {
   float minY = 0;
   float maxX = graphics.bounds.w;
   float maxY = graphics.bounds.h;
-  uint8_t renderSkip = 1;
+  uint8_t renderSkip = 0;
   uint8_t renderCount = 0;
 
   uint16_t i = 0;
   uint8_t mode = MODE_BOUNCE;
-  float forcePower = 2.0f;
+  float forcePower = -4.0f;
   float step = 2.0f;
   bool mass = true;
+  bool mergesOn = false;
 
   while (true) {
     // Check the states of the buttons. These blocks check the button states and
@@ -223,124 +231,190 @@ int main() {
     }
 
     i = 0;
-    for (auto &shape : shapes) {
-      // Update shape position
-      shape.x += shape.dx;
-      shape.y += shape.dy;
+    for (auto& shape : shapes) {
+      if (shape.r > 0) {
+        // Update shape position
+        shape.x += shape.dx;
+        shape.y += shape.dy;
 
-      // Check for collision with shapes already updated
-      for (uint8_t j = 0; j < i; j++) {
-        // Check distance between shapes
-        float sepx = shapes[j].x - shape.x;
-        float sepy = shapes[j].y - shape.y;
-        uint16_t sep = int(sqrt((sepx * sepx) + (sepy * sepy)));
+        // Check for collision with shapes already updated
+        for (uint8_t j = 0; j < i; j++) {
+          // Check distance between shapes
+          float sepx = shapes[j].x - shape.x;
+          float sepy = shapes[j].y - shape.y;
+          uint16_t sep = int(sqrt((sepx * sepx) + (sepy * sepy)));
 
-        // Don't try to process interactions if shapes exactly on top of one
-        // another
-        if (sep > 0.0) {
-          float ax = 0.0f;
-          float ay = 0.0f;
+          // Don't try to process interactions if shapes exactly on top of one
+          // another
+          if (sep > 0.0) {
+            float ax = 0.0f;
+            float ay = 0.0f;
 
-          uint8_t rd = 0;
-          float force = forcePower;
+            uint8_t rd = 0;
+            float force = forcePower;
 
-          // Bounce if contacting
-          rd = shape.r + shapes[j].r;
-          if (sep < rd) {
-            // If forces between balls, allow to pass each other when
-            // overlapping, unless centres really close. Don't apply forces
-            // during overlap as force is too strong and they just stick
-            // together.
-            if (mode == MODE_BOUNCE || sep < rd / 4) {
-              // Bounce balls off each other
-              /*
-              //Trig solution
-              float angle = atan2(sepy, sepx);
-              float targetX = shape.x + cos(angle) * sep;
-              float targetY = shape.y + sin(angle) * sep;
-              float ax = (targetX - shape.x);
-              float ay = (targetY - shape.y);
-              */
+            // Bounce if contacting
+            rd = shape.r + shapes[j].r;
+            if (sep < rd) {
+              // If forces between balls, allow to pass each other when
+              // overlapping, unless centres really close. Don't apply forces
+              // during overlap as force is too strong and they just stick
+              // together.
+              if (mode == MODE_BOUNCE || sep < rd / 4) {
+                if (mode == MODE_FORCES && mergesOn) {
+                  led.set_rgb(80, 120, 0);  // Set RGB LED colour
+                  // Add shapes to merge list
+                  idxPair pair;
+                  pair.idx1 = i;
+                  pair.idx2 = j;
+                  mergeList.push_back(pair);
+                } else {
+                  // Bounce balls off each other
+                  /*
+                  //Trig solution
+                  float angle = atan2(sepy, sepx);
+                  float targetX = shape.x + cos(angle) * sep;
+                  float targetY = shape.y + sin(angle) * sep;
+                  float ax = (targetX - shape.x);
+                  float ay = (targetY - shape.y);
+                  */
 
-              // Handle x and y components seperately (more efficient)
-              ax = sepx;
-              ay = sepy;
+                  // Handle x and y components seperately (more efficient)
+                  ax = sepx;
+                  ay = sepy;
+                }
+              }
+            } else {
+              switch (mode) {
+                case MODE_FORCES:
+                  // Repel, Force is inverse of distance squared
+                  force = force / (sep * sep);
+                  ax = force * sepx / sep;
+                  ay = force * sepy / sep;
+
+                  break;
+              }
             }
-          } else {
-            switch (mode) {
-              case MODE_FORCES:
-                // Repel, Force is inverse of distance squared
-                force = force / (sep * sep);
-                ax = force * sepx / sep;
-                ay = force * sepy / sep;
 
-                break;
+            float prePower =
+                sqrt(shape.dx * shape.dx + shape.dy * shape.dy) +
+                sqrt(shapes[j].dx * shapes[j].dx + shapes[j].dy * shapes[j].dy);
+            if (mass) {
+              shape.dx -= ax * shapes[j].r;
+              shape.dy -= ay * shapes[j].r;
+              shapes[j].dx += ax * shape.r;
+              shapes[j].dy += ay * shape.r;
+            } else {
+              shape.dx -= ax * 10;
+              shape.dy -= ay * 10;
+              shapes[j].dx += ax * 10;
+              shapes[j].dy += ay * 10;
             }
+
+            float postPower =
+                sqrt(shape.dx * shape.dx + shape.dy * shape.dy) +
+                sqrt(shapes[j].dx * shapes[j].dx + shapes[j].dy * shapes[j].dy);
+            float scalePower = prePower / postPower;
+
+            shape.dx = shape.dx * scalePower;
+            shape.dy = shape.dy * scalePower;
+            shapes[j].dx = shapes[j].dx * scalePower;
+            shapes[j].dy = shapes[j].dy * scalePower;
           }
-
-          float prePower =
-              sqrt(shape.dx * shape.dx + shape.dy * shape.dy) +
-              sqrt(shapes[j].dx * shapes[j].dx + shapes[j].dy * shapes[j].dy);
-          if (mass) {
-            shape.dx -= ax * shapes[j].r;
-            shape.dy -= ay * shapes[j].r;
-            shapes[j].dx += ax * shape.r;
-            shapes[j].dy += ay * shape.r;
-          } else {
-            shape.dx -= ax * 10;
-            shape.dy -= ay * 10;
-            shapes[j].dx += ax * 10;
-            shapes[j].dy += ay * 10;
-          }
-
-          float postPower =
-              sqrt(shape.dx * shape.dx + shape.dy * shape.dy) +
-              sqrt(shapes[j].dx * shapes[j].dx + shapes[j].dy * shapes[j].dy);
-          float scalePower = prePower / postPower;
-
-          shape.dx = shape.dx * scalePower;
-          shape.dy = shape.dy * scalePower;
-          shapes[j].dx = shapes[j].dx * scalePower;
-          shapes[j].dy = shapes[j].dy * scalePower;
         }
-      }
 
-      // Check shape remains in bounds of screen, reverse direction if not
-      if ((shape.x - shape.r) < minX) {
-        shape.dx *= -1;
-        shape.x = minX + shape.r;
-      }
-      if ((shape.x + shape.r) >= maxX) {
-        shape.dx *= -1;
-        shape.x = maxX - shape.r;
-      }
-      if ((shape.y - shape.r) < minY) {
-        shape.dy *= -1;
-        shape.y = minY + shape.r;
-      }
-      if ((shape.y + shape.r) >= maxY) {
-        shape.dy *= -1;
-        shape.y = maxY - shape.r;
-      }
+        // Check shape remains in bounds of screen, reverse direction if not
+        if ((shape.x - shape.r) < minX) {
+          shape.dx *= -1;
+          shape.x = minX + shape.r;
+        }
+        if ((shape.x + shape.r) >= maxX) {
+          shape.dx *= -1;
+          shape.x = maxX - shape.r;
+        }
+        if ((shape.y - shape.r) < minY) {
+          shape.dy *= -1;
+          shape.y = minY + shape.r;
+        }
+        if ((shape.y + shape.r) >= maxY) {
+          shape.dy *= -1;
+          shape.y = maxY - shape.r;
+        }
 
-      if (renderCount == 0) {
-        // Skip the slow calcs if 1:1 scale with screen
-        if (minX == 0 && minY == 0) {
-          // Draw circles at 1:1 scale on screen
-          graphics.set_pen(shape.pen);
-          graphics.circle(Point(shape.x, shape.y), shape.r);
+        if (renderCount == 0) {
+          // Skip the slow calcs if 1:1 scale with screen
+          if (minX == 0 && minY == 0) {
+            // Draw circles at 1:1 scale on screen
+            graphics.set_pen(shape.pen);
+            graphics.circle(Point(shape.x, shape.y), shape.r);
+          } else {
+            // Draw circles scaled to boundaries
+            float posX = graphics.bounds.w * (shape.x - minX) / (maxX - minX);
+            float posY = graphics.bounds.h * (shape.y - minY) / (maxY - minY);
+            float rad = graphics.bounds.h * shape.r / (maxY - minY);
+            if (rad < 2) rad = 2;
+            graphics.set_pen(shape.pen);
+            graphics.circle(Point(posX, posY), rad);
+          }
+        }
+
+        i++;
+      } else {
+        led.set_rgb(255, 0, 0);
+      }
+    }
+
+    if (mergesOn && mergeList.size() > 0) {
+      // Merge balls in merge list
+      for (uint16_t i = 0; i < mergeList.size(); i++) {
+        // Item 2 will be merged with item 1. Then remove item 2 from simulation
+        idxPair& pair = mergeList.at(i);
+        pt& primeBall = shapes.at(pair.idx1);
+        pt& secBall = shapes.at(pair.idx2);
+        primeBall.x = (primeBall.x + secBall.x) / 2;
+        primeBall.y = (primeBall.y + secBall.y) / 2;
+        if (mass) {
+          // Combine velocity with radius
+          primeBall.dx = (primeBall.dx * primeBall.r + secBall.dx * secBall.r) /
+                         (primeBall.r + secBall.r);
+          primeBall.dy = (primeBall.dy * primeBall.r + secBall.dy * secBall.r) /
+                         (primeBall.r + secBall.r);
         } else {
-          // Draw circles scaled to boundaries
-          float posX = graphics.bounds.w * (shape.x - minX) / (maxX - minX);
-          float posY = graphics.bounds.h * (shape.y - minY) / (maxY - minY);
-          float rad = graphics.bounds.h * shape.r / (maxY - minY);
-          if (rad < 2) rad = 2;
-          graphics.set_pen(shape.pen);
-          graphics.circle(Point(posX, posY), rad);
+          // Just add velocities
+          primeBall.dx = (primeBall.dx + secBall.dx);
+          primeBall.dy = (primeBall.dy + secBall.dy);
+        }
+        // double area1 = M_PI * std::pow(primeBall.r, 2);
+        // double area2 = M_PI * std::pow(secBall.r, 2);
+        primeBall.r = std::sqrt(std::pow(primeBall.r, 2) + std::pow(secBall.r, 2));
+        secBall.r = 0;  // Flag for destruction, but don't delete yet or all our
+                        // merge list indices will be affected
+
+        sprintf(msg, "MergeLSz:%i b1:%i,r%i b2:%i,r%i", mergeList.size(),
+                pair.idx1, primeBall.r, pair.idx2, secBall.r);
+        // Item 2 is gone, so need to update all references to item 2  in the
+        // rest of the merge list with item 1
+        for (uint16_t j = i + 1; j < mergeList.size(); j++) {
+          idxPair& testPair = mergeList.at(j);
+          if (testPair.idx1 == pair.idx2) {
+            testPair.idx1 = pair.idx1;
+          }
+          if (testPair.idx2 == pair.idx2) {
+            testPair.idx2 = pair.idx1;
+          }
         }
       }
 
-      i++;
+      // All merges completed, now remove dead balls
+      for (int16_t i = (shapes.size() - 1); i >= 0; i--) {
+        pt& testBall = shapes.at(i);
+        if (testBall.r == 0) {
+          shapes.erase(shapes.begin() + i);
+        }
+      }
+      
+      // Wipe merge list
+      mergeList.clear();
     }
 
     if (renderCount == 0) {
@@ -365,30 +439,31 @@ int main() {
       }
 
       // Update text for information shown on screen
-      if (mass) {
+      if (mergeList.size() > 0) {
+        //
+      } else if (mass) {
         switch (mode) {
           case MODE_BOUNCE:
-            sprintf(msg, "Bounce (M), Balls:%i; FPS = %5.2f", shapes.size(),
-                    fps);
+            sprintf(msg, "Bounce (M), Balls:%i fps:%5.2f", shapes.size(), fps);
             break;
           case MODE_FORCES:
-            sprintf(msg, "Force %.1f (M), Balls:%i; FPS = %5.2f", forcePower,
+            sprintf(msg, "Force %.1f(M), Balls:%i fps:%5.2f", forcePower,
                     shapes.size(), fps);
             break;
           default:
-            sprintf(msg, "Unsupported Mode!, FPS = %5.2f", fps);
+            sprintf(msg, "Unsupported Mode!, fps:%5.2f", fps);
         }
       } else {
         switch (mode) {
           case MODE_BOUNCE:
-            sprintf(msg, "Bounce, Balls:%i; FPS = %5.2f", shapes.size(), fps);
+            sprintf(msg, "Bounce, Balls:%i fps:%5.2f", shapes.size(), fps);
             break;
           case MODE_FORCES:
-            sprintf(msg, "Force %.1f, Balls:%i; FPS = %5.2f", forcePower,
+            sprintf(msg, "Force %.1f, Balls:%i fps:%5.2f", forcePower,
                     shapes.size(), fps);
             break;
           default:
-            sprintf(msg, "Unsupported Mode!, FPS = %5.2f", fps);
+            sprintf(msg, "Unsupported Mode!, fps:%5.2f", fps);
         }
       }
 
@@ -439,44 +514,12 @@ int main() {
         // down for here
         if (checkBtn < 600) {
           // Short button press (under 0.6 seconds).
-          // Find current bounds and multiply by 1.5
-          float minXc = shapes[0].x;
-          float minYc = shapes[0].y;
-          float maxXc = minXc;
-          float maxYc = minYc;
-          for (auto &shape : shapes) {
-            if (shape.x < minXc) minXc = shape.x;
-            if (shape.x > maxXc) maxXc = shape.x;
-            if (shape.y < minYc) minYc = shape.y;
-            if (shape.y > maxYc) maxYc = shape.y;
-          }
-          float midX = minXc + (maxXc - minXc) / 2;
-          float midY = minYc + (maxYc - minYc) / 2;
-          float addX = (maxX - minX) * 1.5 / 2;
-          float addY = (maxY - minY) * 1.5 / 2;
-          minX -= addX;
-          maxX += addX;
-          minY -= addY;
-          maxY += addY;
-
-          renderSkip++;
-        }
-      }
-
-      checkBtn = button_y.was_released();  // Calling this clears the state, so
-                                           // capture the time in a var as we
-                                           // can't ask twice for one press
-      if (checkBtn > 0) {
-        // Button was pressed and released. Take action based on how long it was
-        // down for here
-        if (checkBtn < 600) {
-          // Short button press (under 0.6 seconds).
           // Find current bounds shink area to just include them
           float minXc = shapes[0].x;
           float minYc = shapes[0].y;
           float maxXc = minXc;
           float maxYc = minYc;
-          for (auto &shape : shapes) {
+          for (auto& shape : shapes) {
             if (shape.x < minXc) minXc = shape.x;
             if (shape.x > maxXc) maxXc = shape.x;
             if (shape.y < minYc) minYc = shape.y;
@@ -505,6 +548,46 @@ int main() {
             maxX = graphics.bounds.w;
             maxY = graphics.bounds.h;
             renderSkip = 1;
+          }
+        }
+      }
+
+      checkBtn = button_y.was_released();  // Calling this clears the state, so
+                                           // capture the time in a var as we
+                                           // can't ask twice for one press
+      if (checkBtn > 0) {
+        // Button was pressed and released.
+        if (button_a.held_for() > 0) {
+          // Take alternative action as button a was also held down at the time
+          mergesOn = !mergesOn;
+        } else if (button_b.held_for() > 0) {
+          // Take alternative action as button b was also held down at the time
+          mass = !mass;
+        } else {
+          // Take action based on how long it was pressed for here
+          if (checkBtn < 600) {
+            // Short button press (under 0.6 seconds).
+            // Find current bounds and multiply by 1.5
+            float minXc = shapes[0].x;
+            float minYc = shapes[0].y;
+            float maxXc = minXc;
+            float maxYc = minYc;
+            for (auto& shape : shapes) {
+              if (shape.x < minXc) minXc = shape.x;
+              if (shape.x > maxXc) maxXc = shape.x;
+              if (shape.y < minYc) minYc = shape.y;
+              if (shape.y > maxYc) maxYc = shape.y;
+            }
+            float midX = minXc + (maxXc - minXc) / 2;
+            float midY = minYc + (maxYc - minYc) / 2;
+            float addX = (maxX - minX) * 1.5 / 2;
+            float addY = (maxY - minY) * 1.5 / 2;
+            minX -= addX;
+            maxX += addX;
+            minY -= addY;
+            maxY += addY;
+
+            renderSkip++;
           }
         }
       }

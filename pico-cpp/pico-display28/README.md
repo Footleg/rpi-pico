@@ -20,8 +20,8 @@ On a short press (press and release within 0.6 seconds):
 
 - Button A: Toggles between Bounce mode and Force mode.
 - Button B: Adds a ball for each press
-- Button X: Zooms out.
-- Button Y: Zooms in.
+- Button X: Zooms in.
+- Button Y: Zooms out.
 
 The zooming out is straight forward, as more space is just given to the balls. Zooming in snaps to just fit all the balls on the screen, so it only makes a significant difference when all the balls are close together leaving space to crop from around them.
 
