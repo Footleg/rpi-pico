@@ -1,6 +1,7 @@
 [submodule "pico-cpp/pimoroni-pico"]
 	path = pico-cpp/pimoroni-pico
 	url = https://github.com/pimoroni/pimoroni-pico.git
+	branch = feature/picovector2-and-layers
 [submodule "pico-cpp/RGBMatrixAnimations"]
 	path = pico-cpp/RGBMatrixAnimations
 	url = https://github.com/Footleg/RGBMatrixAnimations.git
