@@ -6,6 +6,8 @@ Many of these projects use the Pico libraries from Pimoroni, and some use my own
 
 `git submodule update --init --recursive`
 
+**NOTE:** Since adding the sparkfun-pico submodule, the above command generates an error for the tlsf submodule which it appears to incorrectly include (at the time of writing). To work around this, I have added the required tlsf files of the correct version of that repo into the presto-projects/libraries folder. You will need to copy this tlsf folder into the sparkfun-pico/sparkfun_pico folder where you should see an empty tlsf folder after the failed submodule update. Then the presto-projects should build.
+
 ## Setting up a development environment for Pico C++ development
 
 Since the Raspberry Pi Pico extension for VSCode was released, development for the Pico has been greatly simplified. But at the time of writing, many online resources still refer to the more complicated set-up required before this extension became available. So here is my guide to converting existing examples to build under the VSCode Pico extension. I have tested this on Windows 10 and Windows 11. I expect it works equally well on the Raspberry Pi or other Linux environments, but I have not tested this myself at this stage.
