@@ -102,8 +102,7 @@ class Animation : public RGBMatrixRenderer {
         animParticles(*this, shake, bounce_),
         pixelSize(pixScale) {
 
-    footlegGraphics = new FootlegGraphics(display, FRAME_BUFFER_WIDTH,
-                                          FRAME_BUFFER_HEIGHT, front_buffer);
+    footlegGraphics = new FootlegGraphics(display, front_buffer);
 
     // Clear screen
     BG = display->create_pen(0, 0, 0);
