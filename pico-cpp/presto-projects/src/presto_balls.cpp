@@ -173,8 +173,7 @@ int main() {
       back_buffer);
   display = new PicoGraphics_PenRGB565(FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT,
                                        front_buffer);
-  footlegGraphics = new FootlegGraphics(display, FRAME_BUFFER_WIDTH,
-                                        FRAME_BUFFER_HEIGHT, front_buffer);
+  footlegGraphics = new FootlegGraphics(display, front_buffer);
   presto->init();
 
   static I2C i2c(30, 31, 100000);
