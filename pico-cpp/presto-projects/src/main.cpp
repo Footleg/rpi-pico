@@ -1,7 +1,7 @@
 /*
  * A boilerplate template project for the Pimoroni Presto. Demonstrating using
  * the Footleg Graphics library to draw circles on a double buffered canvas
- * where pixels are double width or double height. Also demos drawing and 
+ * where pixels are double width or double height. Also demos drawing and
  * updating a vector polygon and drawing text onto the screen.
  *
  * Copyright (c) 2025 Dr Footleg
@@ -9,20 +9,20 @@
  * License: GNU GPL v3.0
  */
 
+#include "../libraries/graphics/footleg_graphics.hpp"
 #include "drivers/st7701/st7701.hpp"
 #include "hardware/dma.h"
 #include "libraries/pico_graphics/pico_graphics.hpp"
 #include "libraries/pico_vector/pico_vector.hpp"
 #include "pico/multicore.h"
 #include "pico/sync.h"
-#include "../libraries/graphics/footleg_graphics.hpp"
 
 using namespace pimoroni;
 
 // To get the best graphics quality without exceeding the RAM, use a width of
-// 480 with a height of 240. All drawing commands will be done on a 480 x 480 screen
-// size, and scaled accordingly to draw round circles on the screen regardless of the 
-// buffer aspect ratio used.
+// 480 with a height of 240. All drawing commands will be done on a 480 x 480
+// screen size, and scaled accordingly to draw round circles on the screen
+// regardless of the buffer aspect ratio used.
 #define FRAME_BUFFER_WIDTH 240
 #define FRAME_BUFFER_HEIGHT 480
 
@@ -38,8 +38,8 @@ static const uint LCD_DAT = 27;
 static const uint LCD_DC = -1;
 static const uint LCD_D0 = 1;
 
-uint16_t back_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
-uint16_t front_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
+uint16_t screen_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
+uint16_t draw_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
 
 ST7701* presto;
 PicoGraphics_PenRGB565* display;
@@ -55,11 +55,12 @@ int main() {
   gpio_set_dir(LCD_CS, 1);
 
   presto = new ST7701(
-    FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, ROTATE_0,
-    SPIPins{spi1, LCD_CS, LCD_CLK, LCD_DAT, PIN_UNUSED, LCD_DC, BACKLIGHT},
-    back_buffer);
-  display = new PicoGraphics_PenRGB565(FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, front_buffer);
-  footlegGraphics = new FootlegGraphics(display,FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, front_buffer);
+      FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, ROTATE_0,
+      SPIPins{spi1, LCD_CS, LCD_CLK, LCD_DAT, PIN_UNUSED, LCD_DC, BACKLIGHT},
+      screen_buffer);
+  display = new PicoGraphics_PenRGB565(FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT,
+                                       draw_buffer);
+  footlegGraphics = new FootlegGraphics(display, draw_buffer);
   vector = new PicoVector(display);
   presto->init();
 
@@ -73,17 +74,19 @@ int main() {
   Pen BLUE = display->create_pen(0, 0, 255);
   Pen PINK = display->create_pen(192, 0, 128);
   Pen PURPLE = display->create_pen(128, 0, 128);
-  
+
   float angle = 3.2f;
   int count = 0;
   float direction = 1.0f;
 
   pp_point_t outline[] = {{-36, -36}, {36, -36}, {36, 36}, {-36, 36}};
-  pp_point_t hole[]    = {{ -16,   16}, { 16,   16}, { 16, -16}, { -16, -16}};
+  pp_point_t hole[] = {{-16, 16}, {16, 16}, {16, -16}, {-16, -16}};
 
-  pp_poly_t *poly = pp_poly_new();
-  pp_path_add_points(pp_poly_add_path(poly), outline, sizeof(outline) / sizeof(pp_point_t));
-  pp_path_add_points(pp_poly_add_path(poly), hole, sizeof(hole) / sizeof(pp_point_t));
+  pp_poly_t* poly = pp_poly_new();
+  pp_path_add_points(pp_poly_add_path(poly), outline,
+                     sizeof(outline) / sizeof(pp_point_t));
+  pp_path_add_points(pp_poly_add_path(poly), hole,
+                     sizeof(hole) / sizeof(pp_point_t));
 
   vector->translate(poly, {FRAME_BUFFER_WIDTH / 2.5, FRAME_BUFFER_HEIGHT / 2});
 
@@ -131,21 +134,23 @@ int main() {
     footlegGraphics->drawCircleAA(380, 140, 17, ORANGE);
     footlegGraphics->drawCircleAA(430, 140, 18, YELLOW);
 
-
     display->set_pen(PINK);
-    display->rectangle({20, display->bounds.h / 2, display->bounds.w - 40, display->bounds.h - 110});
+    display->rectangle({20, display->bounds.h / 2, display->bounds.w - 40,
+                        display->bounds.h - 110});
     display->set_pen(YELLOW);
     Point text_location = {30, display->bounds.h / 2 + 20};
-    display->text("Hello Presto World!", text_location, display->bounds.w - text_location.x);
+    display->text("Hello Presto World!", text_location,
+                  display->bounds.w - text_location.x);
 
     // Move the vector
     count++;
-    if(count > 400) {
+    if (count > 400) {
       direction = -direction;
       count = 0;
     }
 
-    vector->rotate(poly, {FRAME_BUFFER_WIDTH / 2, FRAME_BUFFER_HEIGHT / 2}, angle);
+    vector->rotate(poly, {FRAME_BUFFER_WIDTH / 2, FRAME_BUFFER_HEIGHT / 2},
+                   angle);
     vector->translate(poly, {direction, direction});
 
     vector->draw(poly);

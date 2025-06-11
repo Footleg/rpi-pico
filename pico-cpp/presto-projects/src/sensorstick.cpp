@@ -1,10 +1,10 @@
 /*
  * An example project for the Pimoroni Presto with the sensor stick add-on.
  * The readings from the accelerometer are taken, and the resulting vector
- * rotated by an angle to reflect the plane of the screen. The angle is 
- * incremented each time a single-tap event is triggered (sensed by the 
+ * rotated by an angle to reflect the plane of the screen. The angle is
+ * incremented each time a single-tap event is triggered (sensed by the
  * accelerometer) to help calibrate the rotation angle needed so that X
- * is equal to 1G when the screen is vertical. This assumes the sensor stick 
+ * is equal to 1G when the screen is vertical. This assumes the sensor stick
  * is mounted on the base of the Presto parallel to the desk, using the
  * bracket I designed which can be found here:
  * https://www.printables.com/model/1322163-mounting-clip-for-the-sensor-stick-and-presto-from
@@ -41,8 +41,8 @@ static const uint LCD_DAT = 27;
 static const uint LCD_DC = -1;
 static const uint LCD_D0 = 1;
 
-uint16_t back_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
-uint16_t front_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
+uint16_t screen_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
+uint16_t draw_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
 
 ST7701* presto;
 PicoGraphics_PenRGB565* display;
@@ -91,9 +91,9 @@ int main() {
   presto = new ST7701(
       FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, ROTATE_0,
       SPIPins{spi1, LCD_CS, LCD_CLK, LCD_DAT, PIN_UNUSED, LCD_DC, BACKLIGHT},
-      back_buffer);
+      screen_buffer);
   display = new PicoGraphics_PenRGB565(FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT,
-                                       front_buffer);
+                                       draw_buffer);
 
   presto->init();
 
@@ -114,8 +114,8 @@ int main() {
   int text_x = 10;
 
   char msg[64];
-  double angle = -56.0;  // -53.4
-  static const int ACC1G = 17000; // Accelerometer reading for 1G
+  double angle = -56.0;            // -53.4
+  static const int ACC1G = 17000;  // Accelerometer reading for 1G
 
   while (true) {
     display->set_pen(BG);

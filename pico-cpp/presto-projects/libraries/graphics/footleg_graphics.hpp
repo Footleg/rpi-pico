@@ -1,5 +1,5 @@
 /*
- * A graphics library to draw anti-aliased edged circles on displays with 
+ * A graphics library to draw anti-aliased edged circles on displays with
  * non-square pixels. Written for the Pimoroni Presto display to allow
  * double buffering with resolutions of 240 x 480 and 480 x 240 so that
  * the buffers fit into available memory. Circles can be drawn with
@@ -15,20 +15,17 @@
 using namespace pimoroni;
 
 class FootlegGraphics {
-  public:
-    FootlegGraphics(PicoGraphics_PenRGB565* display, uint16_t frame_buffer_width, uint16_t frame_buffer_height, uint16_t* screen_buffer);
-    void circle_scaled(const Point &p, int32_t radius_x, int32_t radius_y);
-    void drawAASpan(float x, int y, float width, uint16_t pen);
-    void drawCircleAA(int centreX, int centreY, int rad, uint16_t pen);
-    void drawCircle(int x, int y, int rad, uint16_t pen);
-  private:
-    PicoGraphics_PenRGB565* display;
-    uint16_t* screen_buffer;
-    uint16_t frame_buffer_width;
-    uint16_t frame_buffer_height;
-    uint16_t screen_width = 480;
-    uint16_t screen_height = 480;
-    void drawPixelSpan(Point p, int width);
+ public:
+  FootlegGraphics(PicoGraphics_PenRGB565* display, uint16_t* screen_buffer);
+  void circle_scaled(const Point& p, int32_t radius_x, int32_t radius_y);
+  void drawAASpan(float x, int y, float width, uint16_t pen);
+  void drawCircleAA(int centreX, int centreY, int rad, uint16_t pen);
+  void drawCircle(int x, int y, int rad, uint16_t pen);
 
+ private:
+  PicoGraphics_PenRGB565* display;
+  uint16_t* screen_buffer;
+  uint16_t screen_width = 480;
+  uint16_t screen_height = 480;
+  void drawPixelSpan(Point p, int width);
 };
-

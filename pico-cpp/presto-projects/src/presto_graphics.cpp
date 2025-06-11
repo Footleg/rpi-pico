@@ -1,12 +1,16 @@
 /*
- * A graphics rendering boilerplate project for the Pimoroni Presto.
+ * A graphics library development project for the Pimoroni Presto.
  * Draws text and circles on the screen using a double buffer.
  * Supporting buffer resolutions of 240 x 240,  240 x 480 and 480 x 240
  * (There is not enough RAM to support a double buffer of 480 x 480).
- * 
+ *
  * This boilerplate project also provides touchscreen support with short
  * and long press events, supporting both press-release and press-hold
  * detection.
+ *
+ * Some of the Footleg Graphics anti-aliased circle drawing code is
+ * broken out in this project to enable debugging and pixel expansion to look
+ * for errors in the drawing code.
  *
  * Copyright (c) 2025 Dr Footleg
  *
@@ -18,6 +22,7 @@
 #include <cstdlib>
 
 #include "../drivers/touchscreen/touchscreen.hpp"
+#include "../libraries/graphics/footleg_graphics.hpp"
 #include "drivers/st7701/st7701.hpp"
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
@@ -27,23 +32,22 @@
 #include "pico/platform.h"
 #include "pico/sync.h"
 #include "pico/time.h"
-#include "../libraries/graphics/footleg_graphics.hpp"
 // #include "pimoroni_i2c.hpp"
 
 using namespace pimoroni;
 
 // To get the best graphics quality without exceeding the RAM, use a width of
-// 480 with a height of 240. All drawing commands will be done on a 480 x 480 screen
-// size, and scaled accordingly to draw round circles on the screen regardless of the 
-// buffer aspect ratio used.
+// 480 with a height of 240. All drawing commands will be done on a 480 x 480
+// screen size, and scaled accordingly to draw round circles on the screen
+// regardless of the buffer aspect ratio used.
 #define FRAME_BUFFER_WIDTH 240
 #define FRAME_BUFFER_HEIGHT 480
 
 bool DRAW_AA = true;  // Sets whether to antialias the edges of the circles
 
-// To help debug graphics, pixels can be rendered as a multiple of actual screen pixels.
-// e.g. A setting of 2 will draw each pixel using 2x2 on screen pixels.
-int pixelMultiplier = 2; 
+// To help debug graphics, pixels can be rendered as a multiple of actual screen
+// pixels. e.g. A setting of 2 will draw each pixel using 2x2 on screen pixels.
+int pixelMultiplier = 2;
 
 int debugY = 0;
 
@@ -59,8 +63,8 @@ static const uint LCD_DAT = 27;
 static const uint LCD_DC = -1;
 static const uint LCD_D0 = 1;
 
-uint16_t back_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
-uint16_t front_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
+uint16_t screen_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
+uint16_t draw_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
 
 ST7701* presto;
 PicoGraphics_PenRGB565* display;
@@ -103,9 +107,9 @@ void drawPixel(Point p) {
 void drawPixelSpan(Point p, int width) {
   if (pixelMultiplier == 1) {
     // Normal pixel span
-    if(width > 0) display->pixel_span(p, width);
+    if (width > 0) display->pixel_span(p, width);
   } else {
-    // Multiplied pixels span 
+    // Multiplied pixels span
     for (int xi = 0; xi < width; xi++) {
       drawPixel(Point(p.x + xi, p.y));
     }
@@ -126,11 +130,13 @@ void drawAASpan(float x, int y, float width, uint16_t pen) {
     // Antialias start and end pixels into black only if background is black
     display->set_pen(
         display->create_pen(rgb.r * spanX, rgb.g * spanX, rgb.b * spanX));
-    if (front_buffer[y * FRAME_BUFFER_WIDTH + iX1] >= 0) drawPixel(Point(iX1, y));
-    if (front_buffer[y * FRAME_BUFFER_WIDTH + iX2] >= 0) drawPixel(Point(iX2, y));
-    // front_buffer[y * FRAME_BUFFER_WIDTH + iX1] = 255*8; // DEBUG force test pixel to
-    // show front_buffer[y * FRAME_BUFFER_WIDTH + iX2] = 255*8; // DEBUG force test
-    // pixel to show
+    if (draw_buffer[y * FRAME_BUFFER_WIDTH + iX1] >= 0)
+      drawPixel(Point(iX1, y));
+    if (draw_buffer[y * FRAME_BUFFER_WIDTH + iX2] >= 0)
+      drawPixel(Point(iX2, y));
+    // front_buffer[y * FRAME_BUFFER_WIDTH + iX1] = 255*8; // DEBUG force test
+    // pixel to show front_buffer[y * FRAME_BUFFER_WIDTH + iX2] = 255*8; //
+    // DEBUG force test pixel to show
 
     // if (width > 1 && width <= 2) {
     //   debug1 = x;
@@ -177,7 +183,7 @@ void drawCircleAA(int centreX, int centreY, int rad, uint16_t pen) {
     float yscaled2 = float(y * screen_height / FRAME_BUFFER_HEIGHT) *
                      float(y * screen_height / FRAME_BUFFER_HEIGHT);
     float x_limit =
-      std::sqrt(rad * rad - yscaled2) * FRAME_BUFFER_WIDTH / screen_width;
+        std::sqrt(rad * rad - yscaled2) * FRAME_BUFFER_WIDTH / screen_width;
     float lineX = float(scaledCenX) + 0.5 - x_limit;
     float length = 2 * x_limit;
     // if (y == debugY) {
@@ -198,7 +204,8 @@ void drawCircleAA(int centreX, int centreY, int rad, uint16_t pen) {
   // float lineX = float(centreX - rad) * FRAME_BUFFER_WIDTH / screen_width;
   // float width = 2 * rad * FRAME_BUFFER_WIDTH / screen_width;
 
-  // drawAASpan(lineX, centreY * FRAME_BUFFER_HEIGHT / screen_height, width, pen);
+  // drawAASpan(lineX, centreY * FRAME_BUFFER_HEIGHT / screen_height, width,
+  // pen);
 }
 
 void drawCircle(int x, int y, int rad, uint16_t pen) {
@@ -207,7 +214,8 @@ void drawCircle(int x, int y, int rad, uint16_t pen) {
   } else {
     int rad_x, rad_y;
     Point position =
-        Point(x * pixelMultiplier * FRAME_BUFFER_WIDTH / screen_width, y * pixelMultiplier * FRAME_BUFFER_HEIGHT / screen_height);
+        Point(x * pixelMultiplier * FRAME_BUFFER_WIDTH / screen_width,
+              y * pixelMultiplier * FRAME_BUFFER_HEIGHT / screen_height);
 
     display->set_pen(pen);
 
@@ -254,10 +262,11 @@ int main() {
   presto = new ST7701(
       FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, ROTATE_0,
       SPIPins{spi1, LCD_CS, LCD_CLK, LCD_DAT, PIN_UNUSED, LCD_DC, BACKLIGHT},
-      back_buffer);
-  display = new PicoGraphics_PenRGB565(FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, front_buffer);
+      screen_buffer);
+  display = new PicoGraphics_PenRGB565(FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT,
+                                       draw_buffer);
 
-  footlegGraphics = new FootlegGraphics(display,FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, front_buffer);
+  footlegGraphics = new FootlegGraphics(display, draw_buffer);
 
   presto->init();
 
@@ -320,8 +329,7 @@ int main() {
             if (touchPoint.y < TOUCH_CORNER_SIZE) {
               // Top Left Corner, toggle text visibility
               showText = !showText;
-              if (showText)
-                debugY++;
+              if (showText) debugY++;
               actionTaken = true;
             } else if (touchPoint.y > touch.bounds.h - TOUCH_CORNER_SIZE) {
               // Bottom Left Corner
@@ -368,9 +376,9 @@ int main() {
     int iX1 = 25;
     display->set_pen(RED);
     debug1 = RED;
-    debug2 = front_buffer[y * FRAME_BUFFER_WIDTH + iX1];
+    debug2 = draw_buffer[y * FRAME_BUFFER_WIDTH + iX1];
     display->set_pixel(Point(iX1, y));
-    debug3 = front_buffer[y * FRAME_BUFFER_WIDTH + iX1];
+    debug3 = draw_buffer[y * FRAME_BUFFER_WIDTH + iX1];
 
     if (showGrid) {
       display->set_pen(GREY);
@@ -385,15 +393,15 @@ int main() {
     display->set_pen(RED);
     int cx = screen_width / pixelMultiplier;
     int cy = screen_height / pixelMultiplier;
-    drawCircle(cx/4, cy/4, 14, RED);
-    drawCircle(cx/4, cy/2, 15, GREEN);
-    drawCircle(cx/4, cy*3/4, 16, BLUE);
-    drawCircle(cx/2, cy/4, 17, RED);
-    drawCircle(cx/2, cy/2, 18, GREEN);
-    drawCircle(cx/2, cy*3/4, 19, BLUE);
-    drawCircle(cx*3/4, cy/4, 20, RED);
-    drawCircle(cx*3/4, cy/2, 21, GREEN);
-    drawCircle(cx*3/4, cy*3/4, 13, BLUE);
+    drawCircle(cx / 4, cy / 4, 14, RED);
+    drawCircle(cx / 4, cy / 2, 15, GREEN);
+    drawCircle(cx / 4, cy * 3 / 4, 16, BLUE);
+    drawCircle(cx / 2, cy / 4, 17, RED);
+    drawCircle(cx / 2, cy / 2, 18, GREEN);
+    drawCircle(cx / 2, cy * 3 / 4, 19, BLUE);
+    drawCircle(cx * 3 / 4, cy / 4, 20, RED);
+    drawCircle(cx * 3 / 4, cy / 2, 21, GREEN);
+    drawCircle(cx * 3 / 4, cy * 3 / 4, 13, BLUE);
 
     // Calculate fps
     frame_counter++;
@@ -414,35 +422,36 @@ int main() {
       }
     }
 
-      // Update text for information shown on screen
-      char prefix[48];
-      char suffix[48];
+    // Update text for information shown on screen
+    char prefix[48];
+    char suffix[48];
 
-      lastTouch = touch.last_touched_point();
-      if (DRAW_AA) {
-        sprintf(prefix, "WxH:%ix%i AA Touch:%i,%i PM:%i", FRAME_BUFFER_WIDTH,
-                FRAME_BUFFER_HEIGHT, lastTouch.x, lastTouch.y, pixelMultiplier);
-      } else {
-        sprintf(prefix, "WxH:%ix%i Touch:%i,%i PM:%i", FRAME_BUFFER_WIDTH,
-                FRAME_BUFFER_HEIGHT, lastTouch.x, lastTouch.y, pixelMultiplier);
-      }
+    lastTouch = touch.last_touched_point();
+    if (DRAW_AA) {
+      sprintf(prefix, "WxH:%ix%i AA Touch:%i,%i PM:%i", FRAME_BUFFER_WIDTH,
+              FRAME_BUFFER_HEIGHT, lastTouch.x, lastTouch.y, pixelMultiplier);
+    } else {
+      sprintf(prefix, "WxH:%ix%i Touch:%i,%i PM:%i", FRAME_BUFFER_WIDTH,
+              FRAME_BUFFER_HEIGHT, lastTouch.x, lastTouch.y, pixelMultiplier);
+    }
 
-      //sprintf(suffix, " fps:%5.2f", fps);
-      sprintf(suffix, " debug:%5.2f,%5.2f,%5.2f at %i", debug1,debug2,debug3,debugY);
+    // sprintf(suffix, " fps:%5.2f", fps);
+    sprintf(suffix, " debug:%5.2f,%5.2f,%5.2f at %i", debug1, debug2, debug3,
+            debugY);
 
-      // Copy the contents of the first array into the combined array
-      strcpy(msg, prefix);
-      // Concatenate the contents of the second array into the combined
-      // array
-      strcat(msg, suffix);
+    // Copy the contents of the first array into the combined array
+    strcpy(msg, prefix);
+    // Concatenate the contents of the second array into the combined
+    // array
+    strcat(msg, suffix);
 
-      // Render Mode info and FPS to screen
-      display->set_pen(WHITE);
-       
+    // Render Mode info and FPS to screen
+    display->set_pen(WHITE);
+
     if (showText || elapsed - lastSettingsChange < 2000000) {
       display->text(msg, text_location, display->bounds.w - text_location.x, 2);
     } else {
-      display->set_pixel(Point(4,4));
+      display->set_pixel(Point(4, 4));
     }
 
     presto->update(display);
