@@ -8,3 +8,6 @@
 [submodule "pico-cpp/presto"]
 	path = pico-cpp/presto
 	url = https://github.com/pimoroni/presto.git
+[submodule "pico-cpp/presto-projects/sparkfun-pico"]
+	path = pico-cpp/presto-projects/sparkfun-pico
+	url = https://github.com/sparkfun/sparkfun-pico

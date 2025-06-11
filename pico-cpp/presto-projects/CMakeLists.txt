@@ -20,6 +20,15 @@ set(PICO_BOARD pimoroni_pico_plus2_rp2350 CACHE STRING "Board type")
 # Change your executable name to something creative!
 set(NAME presto_test) # <-- Name your project/executable here!
 
+# the following enables the system malloc/free to be wrapped
+set(SKIP_PICO_MALLOC 1)
+
+# the following enables wrapping in sparkfun_pico builds
+set(SFE_PICO_ALLOC_WRAP 1)
+
+# the following enables the system malloc/free to be wrapped during compilation
+add_definitions(-DSFE_PICO_ALLOC_WRAP -DSFE_RP2350_XIP_CSI_PIN=47)
+
 include(pimoroni_pico_import.cmake)
 include(pico_sdk_import.cmake)
 
@@ -51,6 +60,7 @@ add_subdirectory(drivers/ft6x36)
 add_subdirectory(drivers/touchscreen)
 add_subdirectory(drivers/lsm6ds3)
 add_subdirectory(libraries/graphics)
+add_subdirectory(sparkfun-pico/sparkfun_pico)
 
 # Add your source files
 add_executable(${NAME}
@@ -111,5 +121,6 @@ include(CPack)
 
 include(presto_balls.cmake)
 include(presto_graphics.cmake)
+include(presto_graphics_psram.cmake)
 include(presto_animations.cmake)
 include(sensor_stick.cmake)
