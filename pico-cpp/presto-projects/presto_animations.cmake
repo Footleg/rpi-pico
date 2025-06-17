@@ -21,6 +21,7 @@ target_link_libraries(${OUTPUT_NAME}
   Crawler
   GameOfLife
   GravityParticles
+  sparkfun_pico
 )
 
 # enable usb output

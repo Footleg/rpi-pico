@@ -1,9 +1,15 @@
 /*
- * A demonstration project of my RGB animations library using the 
- * Pimoroni Presto.
+ * A demonstration project of my RGB animations library using the Pimoroni
+ * Presto. A virtual LED matrix of variable resolutions is drawn on the screen
+ * as circles. The size of the virtual LED matrix is controlled by touching the
+ * top right or bottom right of the screen to set LED size. Press and hold on
+ * the screen anywhere to toggle residual mode. Show/hide the text by touching
+ * the top left of the screen. Switch animations by touching the bottom left.
  *
- * Supporting buffer resolutions of 240 x 240,  240 x 480 and 480 x 240
- * (There is not enough RAM to support a double buffer of 480 x 480).
+ * Supports drawing at full screen resolution 480 x 480 by not using double
+ * buffer. There is not enough RAM to support a double buffer of 480 x 480
+ * unless we use the much slower PSRAM (which still shows flicker due to the
+ * refresh rate being so slow).
  *
  * Copyright (c) 2025 Dr Footleg
  *
@@ -29,20 +35,23 @@
 #include "pico/platform.h"
 #include "pico/sync.h"
 #include "pico/time.h"
+extern "C" {
+#include "sfe_pico_alloc.h"
+#include "sfe_psram.h"
+}
 
 using namespace pimoroni;
 
-// To get the best graphics quality without exceeding the RAM, use a width of
-// 480 with a height of 240. All drawing commands will be done on a 480 x 480
-// screen size, and scaled accordingly to draw round circles on the screen
-// regardless of the buffer aspect ratio used.
+// To get the best graphics quality without exceeding the RAM, this example
+// uses a screen resolution of 480 x 480 without a double buffer.
+// Tearing is avoided by drawing cells directly to the screen or clearing
+// them by drawing over them in black, rather than clearing the whole screen
+// and redrawing it for each frame.
 #define FRAME_BUFFER_WIDTH 480
-#define FRAME_BUFFER_HEIGHT 240
+#define FRAME_BUFFER_HEIGHT 480
 
-// This is the resolution of the simulation space (independent of the resolution
-// of the screen we decide to render it onto)
-static const uint16_t screen_width = 480;
-static const uint16_t screen_height = 480;
+#define DRAW_BUF_SIZE \
+  (FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT * sizeof(uint16_t))
 
 static const uint BACKLIGHT = 45;
 static const uint LCD_CLK = 26;
@@ -51,12 +60,22 @@ static const uint LCD_DAT = 27;
 static const uint LCD_DC = -1;
 static const uint LCD_D0 = 1;
 
-// uint16_t back_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
-uint16_t front_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
+// Use one of these 3 buffer options. If using the psram buffer, then uncomment
+// the allocation line at the start of the main() function
+uint16_t screen_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT];
+// uint16_t draw_buffer[FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT]; // Dbl buffer
+// in main RAM
+uint16_t* draw_buffer = screen_buffer;  // Single buffer (draw buffer mapped
+                                        // directly to screen buffer RAM)
+// uint16_t* draw_buffer; // Double buffer using PSRAM. Will be allocated using
+// psram in main()
 
 ST7701* presto;
 PicoGraphics_PenRGB565* display;
 LSM6DS3* accel;
+
+Pen BG;  // Set in main after display object has been created, but declared here
+         // so globally accessible
 
 // Maximum time in ms for a touch and release to be acted on as a 'short press'
 static const uint TOUCH_SHORT_PRESS_TIME = 200;
@@ -72,6 +91,8 @@ static const int ACC1G = 17000;      // Accelerometer reading for 1G
 static const float gFactor = 0.2;    // Scale force to apply for gravity
 static const float friction = 0.99;  // Dampening factor (represents friction)
 
+bool showText = true;
+
 // Animations settings
 static const uint8_t animModeGol = 0;
 static const uint8_t animModeCrawler = 1;
@@ -80,11 +101,12 @@ static const uint8_t animModeParticles = 2;
 uint16_t steps = 10;
 uint16_t minSteps = 2;
 
-uint8_t golFadeSteps = 1;
-uint16_t golDelay = 1;
+uint8_t golFadeSteps = 0;
+uint16_t golDelay = 100;
 uint8_t golStartPattern = 0;
 
 bool residual = true;
+uint16_t pixelsRedrawn = 0;
 
 // RGB Matrix class which passes itself as a renderer implementation into the
 // animation class. Needs to be declared before the global variable accesses it
@@ -95,30 +117,23 @@ class Animation : public RGBMatrixRenderer {
   Animation(uint8_t pixScale, uint16_t steps_, uint16_t minSteps_,
             uint8_t golFadeSteps_, uint16_t golDelay_, uint8_t golStartPattern_,
             uint16_t shake, uint8_t bounce_)
-      : RGBMatrixRenderer{static_cast<uint16_t>(screen_width / pixScale),
-                          static_cast<uint16_t>(screen_height / pixScale)},
+      : RGBMatrixRenderer{static_cast<uint16_t>(FRAME_BUFFER_WIDTH /
+                                                ceil(pixScale * 1.2)),
+                          static_cast<uint16_t>(FRAME_BUFFER_HEIGHT /
+                                                ceil(pixScale * 1.2))},
         animCrawler(*this, steps_, minSteps_, false),
-        animGol(*this, golFadeSteps_, golDelay_, golStartPattern_),
+        animGol(*this, golFadeSteps_, golDelay_, 0, golStartPattern_),
         animParticles(*this, shake, bounce_),
         pixelSize(pixScale) {
-
-    footlegGraphics = new FootlegGraphics(display, front_buffer);
+    footlegGraphics = new FootlegGraphics(display, draw_buffer);
 
     // Clear screen
-    BG = display->create_pen(0, 0, 0);
     display->set_pen(BG);
     display->clear();
 
     // Precalculate pixel radius
-    // if (pixelSize > 7) {
-      rad = pixelSize / 2 - 1;
-    // } else if (pixelSize > 6) {
-    //   rad = 3;
-    // } else if (pixelSize > 1) {
-    //   rad = 2;
-    // } else {
-    //   rad = 1;
-    // }
+    rad = pixelSize / 2;  // - 1
+    if (rad < 1) rad = 1;
 
     // Initialise mode
     aniMode = animModeGol;
@@ -132,6 +147,11 @@ class Animation : public RGBMatrixRenderer {
   }
 
   void animationStep() {
+    // (Don't clear screen as we are not using double buffer so we just draw
+    // over pixels as they need updating)
+    // display->set_pen(BG);
+    // display->clear();
+
     switch (aniMode) {
       case animModeGol:
         animGol.runCycle();
@@ -155,10 +175,14 @@ class Animation : public RGBMatrixRenderer {
   virtual void showPixels() { presto->update(display); }
 
   virtual void outputMessage(char msg[]) {
-    if (msg[0] == 32) {
+    if (showText) {
+      // Blank rectangle area of one line of text across top of screen
+      display->set_pen(BG);
+      display->rectangle({0, 0, 480, 12});
+      // Draw text in blanked area
       display->set_pen(WHITE);
       Point text_location(0, 0);
-      display->text(msg, text_location, 480);
+      display->text(msg, text_location, display->bounds.w);
     }
   }
 
@@ -181,29 +205,6 @@ class Animation : public RGBMatrixRenderer {
 
     animParticles.clearParticles();
     animParticles.imgToParticles();
-
-    // RGB_colour yellow = {255,200,120};
-
-    // //Add grains in random positions with random initial velocities
-    // int16_t maxVel = 10000;
-    // for (int i=0; i<numParticles; i++) {
-    //     //animation.addParticle( getRandomColour() );
-    //     int16_t vx = random_int16(-maxVel,maxVel+1);
-    //     int16_t vy = random_int16(-maxVel,maxVel+1);
-    //     if (vx > 0) {
-    //         vx += maxVel/5;
-    //     }
-    //     else {
-    //         vx -= maxVel/5;
-    //     }
-    //     if (vy > 0) {
-    //         vy += maxVel/5;
-    //     }
-    //     else {
-    //         vy -= maxVel/5;
-    //     }
-    //     animParticles.addParticle( yellow, vx, vy );
-    // }
   }
 
   uint16_t particleCount() { return animParticles.getParticleCount(); }
@@ -252,47 +253,103 @@ class Animation : public RGBMatrixRenderer {
   uint8_t rad;
 
  private:
-  Pen BG;
+  Pen WHITE = display->create_pen(255, 255, 255);
+  Pen GREY = display->create_pen(96, 96, 96);
+  Pen RED = display->create_pen(255, 0, 0);
+  Pen ORANGE = display->create_pen(255, 128, 0);
+  Pen YELLOW = display->create_pen(255, 255, 0);
+  Pen GREEN = display->create_pen(0, 255, 0);
+  Pen BLUE = display->create_pen(0, 0, 255);
+  Pen PINK = display->create_pen(192, 0, 128);
+  Pen PURPLE = display->create_pen(128, 0, 128);
   Crawler animCrawler;
   GameOfLife animGol;
   GravityParticles animParticles;
   uint8_t aniMode;
-  Pen WHITE = display->create_pen(255, 255, 255);
   uint16_t cycles;
   uint8_t pixelSize;
   FootlegGraphics* footlegGraphics;
 
   virtual void setPixel(uint16_t x, uint16_t y, RGB_colour colour) {
-    Pen pen = display->create_pen(colour.r, colour.g, colour.b);
-    display->set_pen(pen);
-    if (pixelSize == 1) {
-      display->set_pixel(Point(x + 50, y + 45));
-    } else {
-      if (residual) {
-        if (pen > 0) {
-          // Draw larger faint colour surround for cell to create residual colour
-          Pen erase = display->create_pen(colour.r / 3, colour.g / 3, colour.b / 3);
-          footlegGraphics->drawCircle(x * pixelSize + rad + 1,
-                                        y * pixelSize + rad + 1, rad+2, erase);
-          // Draw actual cell
-          footlegGraphics->drawCircleAA(x * pixelSize + rad + 1,
-                                        y * pixelSize + rad + 1, rad, pen);       
+    if (!showText || y > floor(12 / (pixelSize + 1))) {
+      pixelsRedrawn++;
+      Pen pen = display->create_pen(colour.r, colour.g, colour.b);
+      if (pixelSize == 0) {
+        // Not using this for single pixels now, as not enough RAM to handle 1:1
+        // pixel mapping on screen. This would only use 1/4 of the screen.
+        // Instead for pixel size of 1 we draw alternate pixels as cells.
+        display->set_pen(pen);
+        display->set_pixel(Point(x, y));
+      } else if (pixelSize < 3) {
+        uint16_t scrnX = x * ceil(pixelSize * 1.2);
+        uint16_t scrnY = y * ceil(pixelSize * 1.2);
+        if (residual &&
+            (aniMode != animModeGol || animGol.getIteration() > 4)) {
+          if (pen > 0) {
+            // Draw surround to enables trails in non=GOL modes
+            if (aniMode != animModeGol) {
+              RGB rgb = PicoGraphics::rgb565_to_rgb(pen);
+              Pen faintPen =
+                  display->create_pen(rgb.r / 3, rgb.g / 3, rgb.b / 3);
+              footlegGraphics->drawCircleAA(scrnX, scrnY, pixelSize, faintPen);
+            }
+            display->set_pen(pen);
+            // Draw square pixel
+            display->rectangle({scrnX, scrnY, pixelSize, pixelSize});
+          } else {
+            RGB_colour rgb = animGol.getCellColour(x, y);
+            Pen erase = display->create_pen(rgb.r / 3, rgb.g / 3, rgb.b / 3);
+            // Draw surround
+            display->set_pen(erase);
+            display->rectangle(
+                {scrnX - 1, scrnY - 1, pixelSize + 2, pixelSize + 2});
+          }
         } else {
-          // Wipe centre of cell with residual colour
-          footlegGraphics->drawCircle(x * pixelSize + rad + 1,
-                                      y * pixelSize + rad + 1, rad, BG);
+          display->set_pen(pen);
+          if (pen == 0) {
+            // Clear pixel and surround
+            display->rectangle(
+                {scrnX - 1, scrnY - 1, pixelSize + 2, pixelSize + 2});
+          } else {
+            // Draw square pixel
+            display->rectangle({scrnX, scrnY, pixelSize, pixelSize});
+          }
         }
       } else {
-        if (pen == 0) {
-          // Clear pixel with larger circle
-          footlegGraphics->drawCircle(x * pixelSize + rad + 1,
-                                      y * pixelSize + rad + 1, rad+2, BG);
+        uint16_t scrnX = (x * ceil(pixelSize * 1.2) + ceil(pixelSize * 0.6)) *
+                         (480 / display->bounds.w);
+        uint16_t scrnY = (y * ceil(pixelSize * 1.2) + ceil(pixelSize * 0.6)) *
+                         (480 / display->bounds.h);
+        if (residual &&
+            (aniMode != animModeGol || animGol.getIteration() > 4)) {
+          Pen erase =
+              display->create_pen(colour.r / 3, colour.g / 3, colour.b / 3);
+          if (pen > 0) {
+            // Draw larger faint colour surround for cell to create residual
+            // colour
+            footlegGraphics->drawCircle(
+                scrnX, scrnY, (rad + 2) * (480 / display->bounds.w), erase);
+            // Draw actual cell
+            footlegGraphics->drawCircleAA(scrnX, scrnY,
+                                          rad * (480 / display->bounds.w), pen);
+          } else {
+            // Wipe centre of cell with residual colour from GOL cells array
+            RGB_colour rgb = animGol.getCellColour(x, y);
+            erase = display->create_pen(rgb.r / 3, rgb.g / 3, rgb.b / 3);
+            footlegGraphics->drawCircle(scrnX, scrnY,
+                                        rad * (480 / display->bounds.w), erase);
+          }
         } else {
-          footlegGraphics->drawCircleAA(x * pixelSize + rad + 1,
-                                        y * pixelSize + rad + 1, rad, pen);       
+          if (pen == 0) {
+            // Clear pixel with larger circle
+            footlegGraphics->drawCircle(
+                scrnX, scrnY, (rad + 2) * (480 / display->bounds.w), BG);
+          } else {
+            footlegGraphics->drawCircleAA(scrnX, scrnY,
+                                          rad * (480 / display->bounds.w), pen);
+          }
         }
       }
-
     }
   }
 };
@@ -325,14 +382,21 @@ int main() {
   gpio_put(LCD_CS, 1);
   gpio_set_dir(LCD_CS, 1);
 
+  // Set up psram and allocate drawing buffer using this
+  sfe_setup_psram(47);
+  sfe_pico_alloc_init();
+  // draw_buffer = (uint16_t*)malloc(DRAW_BUF_SIZE);
+
   presto = new ST7701(
       FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, ROTATE_0,
       SPIPins{spi1, LCD_CS, LCD_CLK, LCD_DAT, PIN_UNUSED, LCD_DC, BACKLIGHT},
-      front_buffer);
+      screen_buffer);
   display = new PicoGraphics_PenRGB565(FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT,
-                                       front_buffer);
+                                       draw_buffer);
 
   presto->init();
+
+  BG = display->create_pen(0, 0, 0);
 
   static I2C i2c(30, 31, 100000);
   static TouchScreen touch(&i2c);
@@ -344,7 +408,7 @@ int main() {
   // Set up animation vars
   uint16_t shake = 100;
   uint8_t bounce = 200;
-  uint8_t pixelSize = 6;
+  uint8_t pixelSize = 5;
   bool crawlerAnyAngle = false;
   uint8_t animationMode = animModeGol;
   uint8_t oldPixelSize;
@@ -354,7 +418,6 @@ int main() {
   Animation animation(pixelSize, steps, minSteps, golFadeSteps, golDelay,
                       golStartPattern, shake, bounce);
 
-
   Point text_location(5, 5);
   Point lastTouch(0, 0);
 
@@ -362,10 +425,10 @@ int main() {
   start_fps = time_us_64();
   lastSettingsChange = start_fps;
 
-  bool showText = true;
-
   // Main simulation loop
   while (true) {
+    pixelsRedrawn = 0;
+
     // Call animation class method to run a cycle
     animation.animationStep();
 
@@ -438,7 +501,8 @@ int main() {
             } else if (touchPoint.y > touch.bounds.h - TOUCH_CORNER_SIZE) {
               // Bottom Right Corner
               uint8_t minSize = 1;
-              if (animationMode == animModeGol and golStartPattern > 0) minSize = 2;
+              if (animationMode == animModeGol and golStartPattern > 0)
+                minSize = 2;
               if (pixelSize > minSize) pixelSize--;
               actionTaken = true;
               lastSettingsChange = time_us_64();
@@ -454,6 +518,13 @@ int main() {
               // Long press anywhere but the screen corners
               // Toggle residual graphics feature
               residual = !residual;
+              if (residual) {
+                animation.residual = 50;
+              } else {
+                animation.residual = 0;
+              }
+              display->set_pen(BG);
+              display->clear();
               lastSettingsChange = time_us_64();
             }
           }
@@ -485,10 +556,9 @@ int main() {
     char suffix[48];
 
     lastTouch = touch.last_touched_point();
-    sprintf(prefix, " WxH:%ix%i Touch:%i,%i", FRAME_BUFFER_WIDTH,
-            FRAME_BUFFER_HEIGHT, lastTouch.x, lastTouch.y);
+    sprintf(prefix, " WxH:%ix%i ", display->bounds.w, display->bounds.h);
 
-    sprintf(suffix, "size:%i fps:%5.2f", pixelSize, fps);
+    sprintf(suffix, "size:%i pd:%i fps:%5.2f", pixelSize, pixelsRedrawn, fps);
 
     // Copy the contents of the first array into the combined array
     strcpy(msg, prefix);
@@ -496,19 +566,10 @@ int main() {
     // array
     strcat(msg, suffix);
 
-    // Render Mode info and FPS to screen
+    // Render Mode info and FPS to screen (need to do this inside animation
+    // class before refresh is called)
     animation.outputMessage(msg);
-
-    // display->set_pen(WHITE);
-
-    // if (showText || elapsed - lastSettingsChange < 2000000) {
-    //   display->text(msg, text_location, display->bounds.w - text_location.x, 2);
-    // } else {
-    //   display->set_pixel(Point(4, 4));
-    // }
-
-    // presto->update(display);
-
+    animation.showPixels();
 
     if (pixelSize != oldPixelSize || golFadeSteps != oldFadeSteps ||
         golStartPattern != oldGolStartPattern) {
@@ -524,13 +585,16 @@ int main() {
         new (&animation) Animation(pixelSize, steps, minSteps, golFadeSteps,
                                    golDelay, golStartPattern, shake, bounce);
       } else {
-        new (&animation) Animation(2, steps, minSteps, golFadeSteps, golDelay,
+        new (&animation) Animation(1, steps, minSteps, golFadeSteps, golDelay,
                                    golStartPattern, shake, bounce);
       }
+      // Reset residual value as animation class was recreated
+      if (residual) {
+        animation.residual = 50;
+      } else {
+        animation.residual = 0;
+      }
     }
-
-
-
   }
 
   return 0;
